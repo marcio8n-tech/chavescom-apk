@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="theme-color" content="#000000" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Chaves.com" />
+  <meta name="description" content="144 episódios clássicos do Chaves" />
+  <title>Chaves.com</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    html,body{width:100%;height:100%;background:#000;color:#fff;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;overflow:hidden;-webkit-tap-highlight-color:transparent}
+
+    /* SPLASH */
+    #splash{position:fixed;inset:0;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999;transition:opacity .6s}
+    #splash.hidden{opacity:0;pointer-events:none}
+    #splash img{width:110px;height:110px;border-radius:22px;margin-bottom:18px;box-shadow:0 8px 32px rgba(255,255,255,.1)}
+    #splash h1{font-size:2rem;font-weight:900;letter-spacing:3px}
+    #splash p{color:#555;margin-top:6px;font-size:.85rem}
+    .dots{display:flex;gap:8px;margin-top:22px}
+    .dots span{width:8px;height:8px;border-radius:50%;background:#fff;animation:bounce 1.2s infinite}
+    .dots span:nth-child(2){animation-delay:.2s}
+    .dots span:nth-child(3){animation-delay:.4s}
+    @keyframes bounce{0%,80%,100%{transform:scale(0);opacity:.3}40%{transform:scale(1);opacity:1}}
+
+    /* PLAYER */
+    #player{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:#000}
+    #vwrap{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center}
+    #vframe{width:100%;height:100%;max-width:calc(100vh * 16/9);max-height:calc(100vw * 9/16);border:none;display:block}
+
+    /* TAP ZONES */
+    .tz{position:absolute;top:0;height:100%;width:18%;z-index:10;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s}
+    #tz-prev{left:0} #tz-next{right:0}
+    .tz:active{background:rgba(255,255,255,.07)}
+    .tz svg{opacity:0;transition:opacity .2s;pointer-events:none}
+    .tz:active svg{opacity:1}
+
+    /* BOTTOM BAR */
+    #bar{position:fixed;bottom:0;left:0;right:0;background:linear-gradient(to top,rgba(0,0,0,.92) 0%,transparent 100%);padding:16px 18px 30px;display:flex;align-items:flex-end;justify-content:space-between;pointer-events:none;z-index:20;transition:opacity .35s}
+    #bar.hidden{opacity:0}
+    #epinfo{pointer-events:none;max-width:65%}
+    #epcounter{font-size:.68rem;color:#888;margin-bottom:4px;text-transform:uppercase;letter-spacing:1px}
+    #eptitle{font-size:1rem;font-weight:600;line-height:1.3}
+    #listbtn{pointer-events:all;background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.22);color:#fff;padding:9px 15px;border-radius:12px;font-size:.83rem;cursor:pointer;backdrop-filter:blur(6px);display:flex;align-items:center;gap:6px;flex-shrink:0;transition:background .2s;-webkit-backdrop-filter:blur(6px)}
+    #listbtn:active{background:rgba(255,255,255,.25)}
+
+    /* SWIPE HINT */
+    #hint{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);padding:11px 22px;border-radius:30px;font-size:.88rem;color:#fff;z-index:50;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;max-width:80%;text-align:center;border:1px solid rgba(255,255,255,.1)}
+    #hint.show{opacity:1}
+
+    /* EPISODE LIST */
+    #listoverlay{position:fixed;inset:0;background:rgba(0,0,0,.97);z-index:100;display:flex;flex-direction:column;transform:translateY(100%);transition:transform .38s cubic-bezier(.22,1,.36,1)}
+    #listoverlay.open{transform:translateY(0)}
+    #listhdr{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid #1e1e1e;flex-shrink:0}
+    #listhdr h2{font-size:1.05rem;font-weight:700}
+    #listhdr small{color:#555;font-size:.8rem;display:block;margin-top:2px}
+    #closebtn{background:#1e1e1e;border:none;color:#fff;width:32px;height:32px;border-radius:50%;font-size:1rem;cursor:pointer;display:flex;align-items:center;justify-content:center}
+    #searchbox{padding:10px 18px;flex-shrink:0}
+    #searchinput{width:100%;background:#111;border:1px solid #2a2a2a;color:#fff;padding:10px 14px;border-radius:10px;font-size:.93rem;outline:none}
+    #searchinput::placeholder{color:#444}
+    #eplist{overflow-y:auto;flex:1;-webkit-overflow-scrolling:touch}
+    .epi{display:flex;align-items:center;padding:13px 18px;gap:12px;border-bottom:1px solid #0f0f0f;cursor:pointer;transition:background .15s;user-select:none}
+    .epi:active{background:#151515}
+    .epi.active{background:#141414}
+    .epnum{font-size:.72rem;color:#444;width:26px;text-align:right;flex-shrink:0}
+    .eptitlelist{font-size:.92rem;line-height:1.3;flex:1}
+    .epi.active .eptitlelist{color:#ffe000;font-weight:600}
+    .epicon{color:#ffe000;font-size:.9rem;flex-shrink:0}
+  </style>
+</head>
+<body>
+
+<div id="splash">
+  <img src="icons/icon-192.png" alt="Chaves" />
+  <h1>Chaves.com</h1>
+  <p>144 episódios clássicos</p>
+  <div class="dots"><span></span><span></span><span></span></div>
+</div>
+
+<div id="player">
+  <div id="vwrap">
+    <iframe id="vframe" allow="autoplay; encrypted-media; fullscreen" allowfullscreen title="Chaves"></iframe>
+    <button class="tz" id="tz-prev" aria-label="Anterior">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+    </button>
+    <button class="tz" id="tz-next" aria-label="Próximo">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="white"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+    </button>
+  </div>
+</div>
+
+<div id="bar">
+  <div id="epinfo">
+    <div id="epcounter"></div>
+    <div id="eptitle"></div>
+  </div>
+  <button id="listbtn">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor"><path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
+    Episódios
+  </button>
+</div>
+
+<div id="hint"></div>
+
+<div id="listoverlay">
+  <div id="listhdr">
+    <div><h2>📺 Episódios</h2><small id="epcountlabel"></small></div>
+    <button id="closebtn">✕</button>
+  </div>
+  <div id="searchbox">
+    <input id="searchinput" type="search" placeholder="🔍  Buscar episódio..." autocomplete="off" />
+  </div>
+  <div id="eplist"></div>
+</div>
+
+<script>
+const EPS=[
+  {id:1,t:'A Casa Da Bruxa',d:'0B_p8pzPcYi4qRXRLYXRYQWxuWVk'},
+  {id:2,t:'A Festa Da Amizade',d:'0B_p8pzPcYi4qZlNpNlRERkFzNTQ'},
+  {id:3,t:'A Fonte Dos Desejos',d:'0B_p8pzPcYi4qb2JUWHI0dzl2d1E'},
+  {id:4,t:'A Galinha Do Vizinho É Mais Gorda Que A Minha',d:'0B_p8pzPcYi4qY0dFcFRWZjBqS3M'},
+  {id:5,t:'A Grande Festa P.1',d:'0B_p8pzPcYi4qd2JyWGdIZ1NaeWM'},
+  {id:6,t:'A Herança Do Seu Madruga',d:'0B_p8pzPcYi4qeENGNTlvcjVocTA'},
+  {id:7,t:'A Largatixa',d:'0B_p8pzPcYi4qazBfSUZqMkVMQmM'},
+  {id:8,t:'A Loucura',d:'0B_p8pzPcYi4qdjNUQS1YWGVSZjA'},
+  {id:9,t:'A Venda Da Vila',d:'0B_p8pzPcYi4qdHNzdGVPNjd0V0E'},
+  {id:10,t:'A Volta Da Chiquinha',d:'0B_p8pzPcYi4qTXVOcWRFeC1ycFk'},
+  {id:11,t:'O Mascote Do Quico',d:'0B_p8pzPcYi4qcnJUSUkzc1BTaUU'},
+  {id:12,t:'O Julgamento Do Chaves',d:'0B_p8pzPcYi4qZGRMZTZ0X09wTzg'},
+  {id:13,t:'Animais Proibidos',d:'0B_p8pzPcYi4qMGhZU2VGRFVYYmc'},
+  {id:14,t:'As Apostas',d:'0B_p8pzPcYi4qSmF4WTNTdWRCNXc'},
+  {id:15,t:'As Bombinhas',d:'0B_p8pzPcYi4qSW1fLXRsTDhRS1E'},
+  {id:16,t:'O Sonâmbulo',d:'0B_p8pzPcYi4qekpkekxyVEFYZFE'},
+  {id:17,t:'O Mistério Dos Pratos',d:'0B_p8pzPcYi4qMGpqcDJZLVp2MkE'},
+  {id:18,t:'Barquinhos De Papel',d:'0B_p8pzPcYi4qSGZLcUxTYkxmcnM'},
+  {id:19,t:'Briga de Água',d:'0B_p8pzPcYi4qUmRieVN4MlBzcnM'},
+  {id:20,t:'O Cachorrinho Do Kiko (Pt.1)',d:'0B_p8pzPcYi4qa0Jua1g0T2w2dnc'},
+  {id:21,t:'Gente Sim, Animais Não (Pt.2)',d:'0B_p8pzPcYi4qa1dPd0lxZWtRak0'},
+  {id:22,t:'Cascas De Banana',d:'0B_p8pzPcYi4qMk1MNy03empxRVU'},
+  {id:23,t:'Confusão No Cabeleireiro',d:'0B_p8pzPcYi4qUzJyeFRrVW5qSUk'},
+  {id:24,t:'O Desjejum Do Chaves (Pt.1)',d:'0B_p8pzPcYi4qdGUyVXJiNVlXdG8'},
+  {id:25,t:'O Desjejum Do Chaves (Pt.2)',d:'0B_p8pzPcYi4qc3hHSFh4X1hBc1U'},
+  {id:26,t:'Desgosto Amoroso',d:'0B_p8pzPcYi4qV25iZTZoS3BWU0U'},
+  {id:27,t:'O Primeiro Dia de Aula (Pt.1)',d:'0B_p8pzPcYi4qclJGZ012QmxBaEU'},
+  {id:28,t:'O Primeiro Dia De Aula (Pt.2)',d:'0B_p8pzPcYi4qNGdGaVpqRFNJWGs'},
+  {id:29,t:'Epidemia De Catapora',d:'0B_p8pzPcYi4qMzNLby03MUVWR1U'},
+  {id:30,t:'Espantalho',d:'0B_p8pzPcYi4qWk9hNWxGT2w0bk0'},
+  {id:31,t:'O Fantasma',d:'0B_p8pzPcYi4qeXlGQ3ZqX3pVMzQ'},
+  {id:32,t:'As Férias Do Chaves (Pt.1)',d:'0B_p8pzPcYi4qU3VsT0FEZEk2NkU'},
+  {id:33,t:'As Férias Do Chaves (Pt.2)',d:'0B_p8pzPcYi4qT3NvbFBMWDZuQXM'},
+  {id:34,t:'Os Filhotes',d:'0B_p8pzPcYi4qV21nWEZEXzVoV0E'},
+  {id:35,t:'O Garoto Sensacional',d:'0B_p8pzPcYi4qU0l3OXgwTUhET3M'},
+  {id:36,t:'A Herança',d:'0B_p8pzPcYi4qdXB4TGNOWDY1Q3M'},
+  {id:37,t:'Histórias Assustadoras',d:'0B_p8pzPcYi4qVEZERTRmNEdxREk'},
+  {id:38,t:'O Inventário',d:'0B_p8pzPcYi4qUVdndGZhNVlZT2s'},
+  {id:39,t:'O Jogo Do Botão',d:'0B_p8pzPcYi4qNVZZWG1CaEVxalU'},
+  {id:40,t:'O Ladrão',d:'0B_p8pzPcYi4qZHBaR3lEdW9naTQ'},
+  {id:41,t:'A Loteria',d:'0B_p8pzPcYi4qbVlBZktGM3lSTVk'},
+  {id:42,t:'O Mecânico',d:'0B_p8pzPcYi4qMUZHbFVkRmpXYWM'},
+  {id:43,t:'Chaves (Pt.1)',d:'0B_p8pzPcYi4qNE1EczBXWkRUNXM'},
+  {id:44,t:'Chaves (Pt.2)',d:'0B_p8pzPcYi4qd2k2VVYxY3VnNGc'},
+  {id:45,t:'O Museu',d:'0B_p8pzPcYi4qN1BSRUlZbExMUjQ'},
+  {id:46,t:'A Namorada Do Chaves',d:'0B_p8pzPcYi4qcE9nZllyR21xb1U'},
+  {id:47,t:'O Natal',d:'0B_p8pzPcYi4qWUU2VVo5T1ZTVVU'},
+  {id:48,t:'As Nozes',d:'0B_p8pzPcYi4qck9QZldEaDZCV1E'},
+  {id:49,t:'O Ourives',d:'0B_p8pzPcYi4qR0VLTHZ1OVB3TFU'},
+  {id:50,t:'O Pacote',d:'0B_p8pzPcYi4qMnlQYWpEamN0dkU'},
+  {id:51,t:'O Palhaço',d:'0B_p8pzPcYi4qb0ZNb0ozb3drV2s'},
+  {id:52,t:'O Passeio',d:'0B_p8pzPcYi4qdnpoaFdUSXpURzg'},
+  {id:53,t:'O Pato',d:'0B_p8pzPcYi4qZHl2aHJxNzlRVVk'},
+  {id:54,t:'O Patinho',d:'0B_p8pzPcYi4qbVlBZktGM3lSTVk'},
+  {id:55,t:'O Pesadelo',d:'0B_p8pzPcYi4qSEU3R2ZpbkFRMFU'},
+  {id:56,t:'O Picapau',d:'0B_p8pzPcYi4qTUhBQTFwNmFFUEU'},
+  {id:57,t:'O Primeiro Emprego',d:'0B_p8pzPcYi4qaWxSXzE4LWRJemc'},
+  {id:58,t:'O Professor',d:'0B_p8pzPcYi4qcUFYdGJFSVBWRFE'},
+  {id:59,t:'O Relógio',d:'0B_p8pzPcYi4qeU1RMkFVSTR2RHc'},
+  {id:60,t:'O Rival',d:'0B_p8pzPcYi4qZnJ3eGlsYVB5aGs'},
+  {id:61,t:'O Sábado',d:'0B_p8pzPcYi4qd0xlbXo0U1V6RDA'},
+  {id:62,t:'O Show',d:'0B_p8pzPcYi4qNGpOVU5vcE1YelU'},
+  {id:63,t:'O Sonho',d:'0B_p8pzPcYi4qUWQ3MzFHVGJGbEU'},
+  {id:64,t:'O Surdo-Mudo',d:'0B_p8pzPcYi4qY0ZMcm9oMEtVUW8'},
+  {id:65,t:'A Testemunha',d:'0B_p8pzPcYi4qSzRaclVRTENUM1U'},
+  {id:66,t:'O Trovador',d:'0B_p8pzPcYi4qRXB5ZFR2V0JPY28'},
+  {id:67,t:'O Valentão',d:'0B_p8pzPcYi4qMzFqZTJFcGFadEk'},
+  {id:68,t:'O Velho',d:'0B_p8pzPcYi4qOE43d3ZkOG5UaWs'},
+  {id:69,t:'Quero Ser Artista',d:'0B_p8pzPcYi4qV3dOWk9nOHQ3aDA'},
+  {id:70,t:'O Quintal',d:'0B_p8pzPcYi4qRGVxdFdOS3V1UTA'},
+  {id:71,t:'O Ratinho',d:'0B_p8pzPcYi4qaVXNzam1ZQ3dKeTQ'},
+  {id:72,t:'Chaves Campeão',d:'0B_p8pzPcYi4qWWlJQkxoelJBd1U'},
+  {id:73,t:'O Leão',d:'0B_p8pzPcYi4qcllGeE1TNWJsSTg'},
+  {id:74,t:'As Brigas',d:'0B_p8pzPcYi4qcUl1NFVKZ3dBdms'},
+  {id:75,t:'O Cofre',d:'0B_p8pzPcYi4qbk9TQ0tnc2x3Tmc'},
+  {id:76,t:'A Crise',d:'0B_p8pzPcYi4qaUhTbW1LNnZTMFE'},
+  {id:77,t:'A Dívida',d:'0B_p8pzPcYi4qYmpMaHg0SVY4UEE'},
+  {id:78,t:'A Doença',d:'0B_p8pzPcYi4qZjhkeFlkbkZLbWM'},
+  {id:79,t:'A Dor De Barriga',d:'0B_p8pzPcYi4qcGVEdUhPekQyNGM'},
+  {id:80,t:'A Enchente',d:'0B_p8pzPcYi4qOHRXb1JOeUNaakU'},
+  {id:81,t:'A Escola De Música',d:'0B_p8pzPcYi4qaVE5RVFNaTTRCZEE'},
+  {id:82,t:'O Espelho',d:'0B_p8pzPcYi4qaWc5YU5YT2haTWs'},
+  {id:83,t:'O Exterminador De Insetos',d:'0B_p8pzPcYi4qaWM0TFdMcHdIeUU'},
+  {id:84,t:'A Fuga',d:'0B_p8pzPcYi4qeEdGblZPUEZKYWM'},
+  {id:85,t:'A Greve',d:'0B_p8pzPcYi4qbGJOblFIWk82VVU'},
+  {id:86,t:'O Hotel',d:'0B_p8pzPcYi4qbWtCb2htR0E1VFk'},
+  {id:87,t:'O Incêndio',d:'0B_p8pzPcYi4qaVlIVFdEdkdRUW8'},
+  {id:88,t:'A Inflação',d:'0B_p8pzPcYi4qeHVrU3ZqQmhzREE'},
+  {id:89,t:'A Namorada Do Quico',d:'0B_p8pzPcYi4qdllRTF9BX1ZyNHc'},
+  {id:90,t:'O Negócio',d:'0B_p8pzPcYi4qUlB5a1VOaUhhUms'},
+  {id:91,t:'A Operação',d:'0B_p8pzPcYi4qU25vUzhYZEIzbzQ'},
+  {id:92,t:'O Padrasto',d:'0B_p8pzPcYi4qVlJuaHNMRk5sWlk'},
+  {id:93,t:'A Pintura',d:'0B_p8pzPcYi4qbU5Bbm1HZnJZWFk'},
+  {id:94,t:'O Problema De Matemática',d:'0B_p8pzPcYi4qTVhtMlJUMHZrN2s'},
+  {id:95,t:'O Reformatório',d:'0B_p8pzPcYi4qcW1JZkRJVDZlWEk'},
+  {id:96,t:'O Sítio',d:'0B_p8pzPcYi4qNW9KbkNndWxaeGM'},
+  {id:97,t:'O Telegrama',d:'0B_p8pzPcYi4qcGI5ZWhtaHRLaW8'},
+  {id:98,t:'A Testemunha Ocular',d:'0B_p8pzPcYi4qYW9Wa3VzUnphQ1E'},
+  {id:99,t:'A Travessura',d:'0B_p8pzPcYi4qS0oyYlQwNlZleEU'},
+  {id:100,t:'O Trio Musical',d:'0B_p8pzPcYi4qM1NRRDA0SlpLR1E'},
+  {id:101,t:'A Viagem (Pt.1)',d:'0B_p8pzPcYi4qclpqd1VkSmQ3Uzg'},
+  {id:102,t:'A Viagem (Pt.2)',d:'0B_p8pzPcYi4qRWxPRVBJb1RvR1k'},
+  {id:103,t:'A Vizinha Fofoqueira',d:'0B_p8pzPcYi4qOHhSZmpuTVNFZWc'},
+  {id:104,t:'A Volta Do Vilão',d:'0B_p8pzPcYi4qdlJLSVRiaDQ3dW8'},
+  {id:105,t:'O Xerife',d:'0B_p8pzPcYi4qU1UzbnQ5MXJCYVE'},
+  {id:106,t:'O Xilindró',d:'0B_p8pzPcYi4qaHJGSlVhbU1scVE'},
+  {id:107,t:'Chaves Piloto',d:'0B95M8ccQx8-LZHRlVUxFUzRlWlU'},
+  {id:108,t:'O Terreno Vago',d:'0B95M8ccQx8-LMHQtOW5xZ3BoWVU'},
+  {id:109,t:'A Carta',d:'0B95M8ccQx8-LTjFhRlNRMFNWbG8'},
+  {id:110,t:'A Bicicleta',d:'0B95M8ccQx8-LcW84bkNGYTROems'},
+  {id:111,t:'O Lápis',d:'0B95M8ccQx8-LdUxuTWpFZGJFQ0U'},
+  {id:112,t:'O Vizinho Rico',d:'0B95M8ccQx8-LSXB6WjN2cmFwZ1k'},
+  {id:113,t:'A Noiva Do Chaves',d:'0B95M8ccQx8-LSVpTN0tLUExUY2s'},
+  {id:114,t:'O Casamento (Pt.1)',d:'0B95M8ccQx8-LZG5XVm9MRFJUMGM'},
+  {id:115,t:'O Casamento (Pt.2)',d:'0B95M8ccQx8-LZzB5RWFFZGFEVVU'},
+  {id:116,t:'A Pescaria',d:'0B95M8ccQx8-LWXRqMU0zMlJYZUU'},
+  {id:117,t:'O Emprego Novo',d:'0B95M8ccQx8-LX2o4SkhhMk1yOFE'},
+  {id:118,t:'Vendendo Carros',d:'0B95M8ccQx8-LaGdJaTNBSGtUZUk'},
+  {id:119,t:'A Homenagem',d:'0B95M8ccQx8-LeGFBd1ZObFZ5Ylk'},
+  {id:120,t:'O Beijo',d:'0B95M8ccQx8-LQ3RVOG50MkN5Z2s'},
+  {id:121,t:'O Espantalho',d:'0B95M8ccQx8-LaEwzY3BnRFBFMlE'},
+  {id:122,t:'A Receita Médica',d:'0B95M8ccQx8-LelFYb0ZKTGFHMlE'},
+  {id:123,t:'O Novo Vizinho',d:'0B95M8ccQx8-LUmZCSDNFRlp2bTg'},
+  {id:124,t:'O Rival Do Chaves',d:'0B95M8ccQx8-LUktyQ3lPSmR2Q1U'},
+  {id:125,t:'O Detetive',d:'0B95M8ccQx8-LTTNueW9NUnpjRkU'},
+  {id:126,t:'O Despejo',d:'0B95M8ccQx8-LUGFaOFRNWkVUc2c'},
+  {id:127,t:'O Empréstimo',d:'0B95M8ccQx8-LNG5PWlJlcGJ2aEU'},
+  {id:128,t:'Chaves Cantor',d:'0B95M8ccQx8-LZW9JdVBfb0VqUkE'},
+  {id:129,t:'A Bebê',d:'0B95M8ccQx8-LZUwxSTVBQmdLSGM'},
+  {id:130,t:'A Pintura II',d:'0B95M8ccQx8-LTWhhYTZJZFBiRms'},
+  {id:131,t:'A Crise II',d:'0B95M8ccQx8-LVjBVVUZEbW9VNUE'},
+  {id:132,t:'O Tesouro',d:'0B95M8ccQx8-LVGJjQ09SeHhQS28'},
+  {id:133,t:'A Pelada',d:'0B95M8ccQx8-La3g5dXRIbHlEbGM'},
+  {id:134,t:'O Coelho',d:'0B95M8ccQx8-LWTZfbHBJZW9EdDA'},
+  {id:135,t:'O Leilão',d:'0B95M8ccQx8-LWEZnNXFWRWlBSWM'},
+  {id:136,t:'O Estudante',d:'0B95M8ccQx8-LRVhGV21MbVY1Ync'},
+  {id:137,t:'A Chiquinha É Minha',d:'0B95M8ccQx8-LdkdZOFRlbTZ2Umc'},
+  {id:138,t:'O Dentista',d:'0B95M8ccQx8-LVUlZb2lyWkFaVGc'},
+  {id:139,t:'A Congestão',d:'0B95M8ccQx8-LSXZIdGVXU1Q4Mm8'},
+  {id:140,t:'Um Bolo Para O Chaves',d:'0B95M8ccQx8-LUkt4c0Z5YnNGclU'},
+  {id:141,t:'Uma Mosca Na Minha Sopa',d:'0B95M8ccQx8-LUXl4UW4zSzFNVms'},
+  {id:142,t:'Chaves Garçom',d:'0B95M8ccQx8-LaXRWMGFldmJtaFU'},
+  {id:143,t:'Caça Aos Ratos',d:'0B95M8ccQx8-LYVJIMXJBS3dtY3c'},
+  {id:144,t:'O Despejo Do Seu Madruga II',d:'0B95M8ccQx8-LUE9KcHY1YUR4RlU'}
+];
+
+let cur=0,barTimer=null,listOpen=false;
+const vframe=document.getElementById('vframe');
+const epcounter=document.getElementById('epcounter');
+const eptitle=document.getElementById('eptitle');
+const bar=document.getElementById('bar');
+const listoverlay=document.getElementById('listoverlay');
+const eplistel=document.getElementById('eplist');
+const searchinput=document.getElementById('searchinput');
+const epcountlabel=document.getElementById('epcountlabel');
+const hint=document.getElementById('hint');
+
+function load(idx){
+  cur=((idx%EPS.length)+EPS.length)%EPS.length;
+  const ep=EPS[cur];
+  vframe.src='https://drive.google.com/file/d/'+ep.d+'/preview';
+  epcounter.textContent='Ep. '+ep.id+' de '+EPS.length;
+  eptitle.textContent=ep.t;
+  localStorage.setItem('lastEp',cur);
+  showBar();
+  updateHL();
+}
+
+function showBar(){
+  bar.classList.remove('hidden');
+  clearTimeout(barTimer);
+  barTimer=setTimeout(()=>bar.classList.add('hidden'),4500);
+}
+
+function showHint(txt){
+  hint.textContent=txt;
+  hint.classList.add('show');
+  clearTimeout(hint._t);
+  hint._t=setTimeout(()=>hint.classList.remove('show'),1400);
+}
+
+document.getElementById('tz-prev').onclick=()=>{load(cur-1);showHint('◀ '+EPS[cur].t);};
+document.getElementById('tz-next').onclick=()=>{load(cur+1);showHint(EPS[cur].t+' ▶');};
+
+// Swipe
+let tx=0,ty=0;
+document.addEventListener('touchstart',e=>{tx=e.touches[0].clientX;ty=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',e=>{
+  if(listOpen)return;
+  const dx=e.changedTouches[0].clientX-tx;
+  const dy=e.changedTouches[0].clientY-ty;
+  if(Math.abs(dx)>Math.abs(dy)&&Math.abs(dx)>55){
+    if(dx<0){load(cur+1);showHint(EPS[cur].t+' ▶');}
+    else{load(cur-1);showHint('◀ '+EPS[cur].t);}
+  }
+},{passive:true});
+
+// Tap center
+document.getElementById('player').addEventListener('click',e=>{
+  if(e.target.closest('.tz')||e.target.closest('#listbtn'))return;
+  bar.classList.contains('hidden')?showBar():(clearTimeout(barTimer),bar.classList.add('hidden'));
+});
+
+// List
+document.getElementById('listbtn').addEventListener('click',openList);
+document.getElementById('closebtn').addEventListener('click',closeList);
+
+function openList(){
+  listOpen=true;
+  listoverlay.classList.add('open');
+  renderList(EPS);
+  setTimeout(()=>{const a=eplistel.querySelector('.active');if(a)a.scrollIntoView({block:'center'});},380);
+}
+function closeList(){
+  listOpen=false;
+  listoverlay.classList.remove('open');
+  searchinput.value='';
+}
+
+function renderList(eps){
+  epcountlabel.textContent=eps.length+' episódios';
+  eplistel.innerHTML=eps.map(ep=>`
+    <div class="epi${ep.id-1===cur?' active':''}" onclick="sel(${ep.id-1})">
+      <span class="epnum">${ep.id}</span>
+      <span class="eptitlelist">${ep.t}</span>
+      ${ep.id-1===cur?'<span class="epicon">▶</span>':''}
+    </div>`).join('');
+}
+
+function updateHL(){
+  eplistel.querySelectorAll('.epi').forEach(el=>{
+    const idx=parseInt(el.querySelector('.epnum').textContent)-1;
+    const act=idx===cur;
+    el.classList.toggle('active',act);
+    let ic=el.querySelector('.epicon');
+    if(act&&!ic){const s=document.createElement('span');s.className='epicon';s.textContent='▶';el.appendChild(s);}
+    else if(!act&&ic)ic.remove();
+  });
+}
+
+window.sel=function(idx){load(idx);closeList();};
+
+searchinput.addEventListener('input',()=>{
+  const q=searchinput.value.toLowerCase().trim();
+  renderList(q?EPS.filter(e=>e.t.toLowerCase().includes(q)):[...EPS]);
+});
+
+// Keyboard
+document.addEventListener('keydown',e=>{
+  if(listOpen)return;
+  if(e.key==='ArrowLeft')load(cur-1);
+  if(e.key==='ArrowRight')load(cur+1);
+});
+
+// Init
+const saved=localStorage.getItem('lastEp');
+load(saved?parseInt(saved):0);
+
+window.addEventListener('load',()=>setTimeout(()=>document.getElementById('splash').classList.add('hidden'),1600));
+
+// SW
+
+</script>
+</body>
+</html>
