@@ -19,26 +19,38 @@
     #player{
       position:fixed;inset:0;
       background:#000;
-      overflow:hidden;
     }
-    #clip{
-      position:absolute;
-      inset:0;
-      overflow:hidden;
-    }
+
+    /* Iframe ocupa 100% da tela — SEM expandir, SEM cortar */
     #vframe{
       position:absolute;
-      /* Topo: apenas -20px pra não cortar o vídeo */
-      /* Baixo: -80px extra pra esconder barra de progresso */
-      top:-20px;
-      left:0;
-      width:100%;
-      height:calc(100% + 100px);
+      top:0;left:0;
+      width:100%;height:100%;
       border:none;
       display:block;
       -webkit-transform:translateZ(0);
       transform:translateZ(0);
     }
+
+    /* Barra preta em cima — cobre o título do Drive */
+    #mask-top{
+      position:absolute;
+      top:0;left:0;right:0;
+      height:42px;
+      background:#000;
+      z-index:5;
+    }
+
+    /* Barra preta embaixo — cobre a barra de progresso do Drive */
+    #mask-bottom{
+      position:absolute;
+      bottom:0;left:0;right:0;
+      height:42px;
+      background:#000;
+      z-index:5;
+    }
+
+    /* Overlay invisível bloqueia toques no iframe */
     #overlay{
       position:absolute;
       inset:0;
@@ -46,6 +58,8 @@
       background:transparent;
       -webkit-tap-highlight-color:transparent;
     }
+
+    /* Zonas de toque laterais */
     .tz{
       position:absolute;top:0;height:100%;width:25%;
       z-index:20;background:transparent;
@@ -59,13 +73,16 @@
 </head>
 <body>
 <div id="player">
-  <div id="clip">
-    <iframe id="vframe"
-      allow="autoplay; encrypted-media; fullscreen"
-      allowfullscreen>
-    </iframe>
-  </div>
+  <iframe id="vframe"
+    allow="autoplay; encrypted-media; fullscreen"
+    allowfullscreen>
+  </iframe>
+  <!-- Máscaras pretas que cobrem as barras do Drive -->
+  <div id="mask-top"></div>
+  <div id="mask-bottom"></div>
+  <!-- Overlay captura todos os toques -->
   <div id="overlay"></div>
+  <!-- Zonas laterais para trocar episódio -->
   <button class="tz" id="tz-prev"></button>
   <button class="tz" id="tz-next"></button>
 </div>
