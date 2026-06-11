@@ -3,86 +3,60 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#000000" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
   <title>Chaves.com</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{
-      width:100%;height:100%;
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html, body {
+      width:100%; height:100%;
       background:#000;
       overflow:hidden;
-      touch-action:none;
     }
-    #player{
-      position:fixed;inset:0;
-      background:#000;
-    }
-
-    /* iframe 100% da tela — sem expandir, sem cortar */
-    #vframe{
-      position:absolute;
-      top:0;left:0;
-      width:100%;height:100%;
+    /* iframe simples, sem transform, sem translateZ, sem overflow:hidden no container */
+    #vframe {
+      position:fixed;
+      top:0; left:0;
+      width:100%; height:100%;
       border:none;
-      -webkit-transform:translateZ(0);
-      transform:translateZ(0);
-    }
-
-    /* Máscara preta em cima — cobre barra de título do Drive */
-    #mask-top{
-      position:absolute;
-      top:0;left:0;right:0;
-      height:40px;
       background:#000;
-      z-index:8;
-      pointer-events:none;
     }
-
-    /* Máscara preta embaixo — cobre barra de progresso do Drive */
-    #mask-bottom{
-      position:absolute;
-      bottom:0;left:0;right:0;
-      height:40px;
+    /* Barras pretas POR CIMA do iframe para cobrir controles do Drive */
+    #bar-top {
+      position:fixed;
+      top:0; left:0; right:0;
+      height:38px;
       background:#000;
-      z-index:8;
-      pointer-events:none;
+      z-index:100;
     }
-
-    /* Overlay bloqueia todos os toques no iframe */
-    #overlay{
-      position:absolute;
-      inset:0;
-      z-index:10;
+    #bar-bottom {
+      position:fixed;
+      bottom:0; left:0; right:0;
+      height:38px;
+      background:#000;
+      z-index:100;
+    }
+    /* Zonas de toque transparentes para trocar episódio */
+    #btn-prev, #btn-next {
+      position:fixed;
+      top:0; height:100%; width:20%;
       background:transparent;
-      -webkit-tap-highlight-color:transparent;
+      border:none;
+      z-index:200;
+      cursor:pointer;
     }
-
-    /* Zonas laterais para trocar episódio */
-    .tz{
-      position:absolute;top:0;height:100%;width:25%;
-      z-index:20;background:transparent;
-      border:none;cursor:pointer;
-      -webkit-tap-highlight-color:transparent;
-      outline:none;
-    }
-    #tz-prev{left:0}
-    #tz-next{right:0}
+    #btn-prev { left:0; }
+    #btn-next { right:0; }
   </style>
 </head>
 <body>
-<div id="player">
   <iframe id="vframe"
     allow="autoplay; encrypted-media; fullscreen"
     allowfullscreen>
   </iframe>
-  <div id="mask-top"></div>
-  <div id="mask-bottom"></div>
-  <div id="overlay"></div>
-  <button class="tz" id="tz-prev"></button>
-  <button class="tz" id="tz-next"></button>
-</div>
+  <div id="bar-top"></div>
+  <div id="bar-bottom"></div>
+  <button id="btn-prev"></button>
+  <button id="btn-next"></button>
+
 <script>
 const EPS=[
   '0B_p8pzPcYi4qRXRLYXRYQWxuWVk','0B_p8pzPcYi4qZlNpNlRERkFzNTQ',
@@ -159,39 +133,36 @@ const EPS=[
   '0B_p8pzPcYi4qUm10WFMwNHVzems','0B_p8pzPcYi4qbFZLcGNXTzlabzg',
 ];
 
-const KEY='chavescom_ep';
-let cur=parseInt(localStorage.getItem(KEY)||'0');
-const frame=document.getElementById('vframe');
+const KEY = 'chavescom_ep';
+let cur = parseInt(localStorage.getItem(KEY) || '0');
+const frame = document.getElementById('vframe');
 
-function load(idx){
-  if(idx<0)idx=EPS.length-1;
-  if(idx>=EPS.length)idx=0;
-  cur=idx;
-  localStorage.setItem(KEY,cur);
-  frame.src='https://drive.google.com/file/d/'+EPS[cur]+'/preview?autoplay=1&controls=0';
+function load(idx) {
+  if (idx < 0) idx = EPS.length - 1;
+  if (idx >= EPS.length) idx = 0;
+  cur = idx;
+  localStorage.setItem(KEY, cur);
+  frame.src = 'https://drive.google.com/file/d/' + EPS[cur] + '/preview?autoplay=1&controls=0';
 }
-function next(){load(cur+1);}
-function prev(){load(cur-1);}
+function next() { load(cur + 1); }
+function prev() { load(cur - 1); }
 
-document.getElementById('tz-prev').addEventListener('click',prev);
-document.getElementById('tz-next').addEventListener('click',next);
+document.getElementById('btn-prev').addEventListener('click', prev);
+document.getElementById('btn-next').addEventListener('click', next);
 
-document.addEventListener('keydown',function(e){
-  if(e.key==='ArrowRight'||e.keyCode===39){e.preventDefault();next();}
-  if(e.key==='ArrowLeft' ||e.keyCode===37){e.preventDefault();prev();}
-  if(e.key==='ArrowUp'   ||e.keyCode===38){e.preventDefault();next();}
-  if(e.key==='ArrowDown' ||e.keyCode===40){e.preventDefault();prev();}
+document.addEventListener('keydown', function(e) {
+  if (e.keyCode === 39 || e.keyCode === 38) { e.preventDefault(); next(); }
+  if (e.keyCode === 37 || e.keyCode === 40) { e.preventDefault(); prev(); }
 });
 
-let sx=null,sy=null;
-document.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
-document.addEventListener('touchend',function(e){
-  if(sx===null)return;
-  const dx=e.changedTouches[0].clientX-sx;
-  const dy=e.changedTouches[0].clientY-sy;
-  if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)){dx<0?next():prev();}
-  sx=null;sy=null;
-},{passive:true});
+let sx = null;
+document.addEventListener('touchstart', function(e) { sx = e.touches[0].clientX; }, {passive:true});
+document.addEventListener('touchend', function(e) {
+  if (sx === null) return;
+  const dx = e.changedTouches[0].clientX - sx;
+  if (Math.abs(dx) > 60) { dx < 0 ? next() : prev(); }
+  sx = null;
+}, {passive:true});
 
 load(cur);
 </script>
