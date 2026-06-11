@@ -11,11 +11,12 @@
         android:label="Chaves.com"
         android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen"
         android:usesCleartextTraffic="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="false">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:hardwareAccelerated="false"
             android:screenOrientation="landscape"
             android:configChanges="orientation|screenSize|keyboardHidden">
             <intent-filter>
