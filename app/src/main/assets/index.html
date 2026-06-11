@@ -13,40 +13,32 @@
     html,body{
       width:100%;height:100%;
       background:#000;
-      overflow:hidden; /* CORTA qualquer coisa fora da tela */
+      overflow:hidden;
       touch-action:none;
     }
     #player{
-      position:fixed;
-      top:0;left:0;
-      width:100%;height:100%;
+      position:fixed;inset:0;
       background:#000;
-      overflow:hidden; /* dupla garantia */
-      -webkit-transform:translateZ(0);
-      transform:translateZ(0);
+      overflow:hidden;
     }
-    /* Container que esconde as barras do Drive SEM vazar pra fora */
     #clip{
       position:absolute;
-      /* Recua as bordas: corta barra superior e inferior do Drive */
-      top:0;left:0;
-      width:100%;height:100%;
-      overflow:hidden; /* tudo que sair aqui é cortado */
+      inset:0;
+      overflow:hidden;
     }
     #vframe{
       position:absolute;
-      /* Expande só pra dentro do clip — não vaza pra fora da tela */
-      top:-65px;
+      /* Topo: apenas -20px pra não cortar o vídeo */
+      /* Baixo: -80px extra pra esconder barra de progresso */
+      top:-20px;
       left:0;
       width:100%;
-      height:calc(100% + 130px);
+      height:calc(100% + 100px);
       border:none;
       display:block;
       -webkit-transform:translateZ(0);
       transform:translateZ(0);
-      will-change:transform;
     }
-    /* Overlay invisível — bloqueia toques no iframe */
     #overlay{
       position:absolute;
       inset:0;
@@ -54,7 +46,6 @@
       background:transparent;
       -webkit-tap-highlight-color:transparent;
     }
-    /* Zonas laterais de troca de episódio */
     .tz{
       position:absolute;top:0;height:100%;width:25%;
       z-index:20;background:transparent;
@@ -165,7 +156,6 @@ function load(idx){
   localStorage.setItem(KEY,cur);
   frame.src='https://drive.google.com/file/d/'+EPS[cur]+'/preview?autoplay=1&controls=0';
 }
-
 function next(){load(cur+1);}
 function prev(){load(cur-1);}
 
