@@ -8,8 +8,6 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <title>Chaves.com</title>
-  <link rel="manifest" href="manifest.json" />
-  <link rel="icon" href="icons/icon-192.png" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{
@@ -17,31 +15,41 @@
       background:#000;
       overflow:hidden;
       touch-action:none;
+      /* Suavização de renderização */
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
     }
     #player{
       position:fixed;inset:0;
       background:#000;
+      /* GPU compositing */
+      -webkit-transform:translateZ(0);
+      transform:translateZ(0);
+      will-change:transform;
     }
-    /* O iframe ocupa 100% + extra para esconder barra do Drive */
     #vframe{
       position:absolute;
-      /* sobe 60px pra cima e cresce 120px a mais — esconde barra superior e inferior do Drive */
-      top:-60px;
-      left:0;
-      width:100%;
-      height:calc(100% + 120px);
+      /* Expande além da tela para cortar barras do Drive */
+      top:-70px;
+      left:-2px;
+      width:calc(100% + 4px);
+      height:calc(100% + 140px);
       border:none;
       display:block;
-      pointer-events:none; /* bloqueia clique no iframe para não ativar os controles do Drive */
+      /* Melhor qualidade de renderização do vídeo */
+      -webkit-transform:translateZ(0);
+      transform:translateZ(0);
+      image-rendering:-webkit-optimize-contrast;
+      will-change:transform;
     }
-    /* Camada transparente por cima — captura todos os toques */
+    /* Overlay captura todos os toques — nenhum chega no iframe */
     #overlay{
       position:absolute;
       inset:0;
       z-index:10;
       background:transparent;
+      -webkit-tap-highlight-color:transparent;
     }
-    /* Zonas de toque lateral */
     .tz{
       position:absolute;top:0;height:100%;width:25%;
       z-index:20;background:transparent;
@@ -54,19 +62,15 @@
   </style>
 </head>
 <body>
-
 <div id="player">
   <iframe id="vframe"
     allow="autoplay; encrypted-media; fullscreen"
     allowfullscreen>
   </iframe>
-  <!-- Overlay bloqueia interação com o iframe -->
   <div id="overlay"></div>
-  <!-- Zonas de toque para trocar episódio -->
-  <button class="tz" id="tz-prev" aria-label="Anterior"></button>
-  <button class="tz" id="tz-next" aria-label="Próximo"></button>
+  <button class="tz" id="tz-prev"></button>
+  <button class="tz" id="tz-next"></button>
 </div>
-
 <script>
 const EPS=[
   '0B_p8pzPcYi4qRXRLYXRYQWxuWVk','0B_p8pzPcYi4qZlNpNlRERkFzNTQ',
@@ -143,54 +147,42 @@ const EPS=[
   '0B_p8pzPcYi4qUm10WFMwNHVzems','0B_p8pzPcYi4qbFZLcGNXTzlabzg',
 ];
 
-const KEY = 'chavescom_ep';
-let cur = parseInt(localStorage.getItem(KEY) || '0');
+const KEY='chavescom_ep';
+let cur=parseInt(localStorage.getItem(KEY)||'0');
+const frame=document.getElementById('vframe');
 
-const frame = document.getElementById('vframe');
-
-function load(idx) {
-  if (idx < 0) idx = EPS.length - 1;
-  if (idx >= EPS.length) idx = 0;
-  cur = idx;
-  localStorage.setItem(KEY, cur);
-  // autoplay=1, controls=0 esconde os controles do Drive
-  frame.src = 'https://drive.google.com/file/d/' + EPS[cur] + '/preview?autoplay=1&controls=0';
+function load(idx){
+  if(idx<0) idx=EPS.length-1;
+  if(idx>=EPS.length) idx=0;
+  cur=idx;
+  localStorage.setItem(KEY,cur);
+  // Parâmetros para máxima qualidade: autoplay, sem controles, sem sugestões
+  frame.src='https://drive.google.com/file/d/'+EPS[cur]+'/preview?autoplay=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3';
 }
 
-function next() { load(cur + 1); }
-function prev() { load(cur - 1); }
+function next(){load(cur+1);}
+function prev(){load(cur-1);}
 
-// Botões laterais
-document.getElementById('tz-prev').addEventListener('click', prev);
-document.getElementById('tz-next').addEventListener('click', next);
+document.getElementById('tz-prev').addEventListener('click',prev);
+document.getElementById('tz-next').addEventListener('click',next);
 
-// Controle remoto / teclado
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'ArrowRight' || e.keyCode === 39) { e.preventDefault(); next(); }
-  if (e.key === 'ArrowLeft'  || e.keyCode === 37) { e.preventDefault(); prev(); }
-  if (e.key === 'ArrowUp'    || e.keyCode === 38) { e.preventDefault(); next(); }
-  if (e.key === 'ArrowDown'  || e.keyCode === 40) { e.preventDefault(); prev(); }
+document.addEventListener('keydown',function(e){
+  if(e.key==='ArrowRight'||e.keyCode===39){e.preventDefault();next();}
+  if(e.key==='ArrowLeft' ||e.keyCode===37){e.preventDefault();prev();}
+  if(e.key==='ArrowUp'   ||e.keyCode===38){e.preventDefault();next();}
+  if(e.key==='ArrowDown' ||e.keyCode===40){e.preventDefault();prev();}
 });
 
-// Swipe horizontal
-let sx = null, sy = null;
-document.addEventListener('touchstart', function(e) {
-  sx = e.touches[0].clientX;
-  sy = e.touches[0].clientY;
-}, {passive: true});
+let sx=null,sy=null;
+document.addEventListener('touchstart',function(e){sx=e.touches[0].clientX;sy=e.touches[0].clientY;},{passive:true});
+document.addEventListener('touchend',function(e){
+  if(sx===null)return;
+  const dx=e.changedTouches[0].clientX-sx;
+  const dy=e.changedTouches[0].clientY-sy;
+  if(Math.abs(dx)>60&&Math.abs(dx)>Math.abs(dy)){dx<0?next():prev();}
+  sx=null;sy=null;
+},{passive:true});
 
-document.addEventListener('touchend', function(e) {
-  if (sx === null) return;
-  const dx = e.changedTouches[0].clientX - sx;
-  const dy = e.changedTouches[0].clientY - sy;
-  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
-    if (dx < 0) next();
-    else prev();
-  }
-  sx = null; sy = null;
-}, {passive: true});
-
-// Iniciar
 load(cur);
 </script>
 </body>
