@@ -7,34 +7,44 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Chaves.com" />
   <title>Chaves.com</title>
   <link rel="manifest" href="manifest.json" />
-  <link rel="apple-touch-icon" href="icons/icon-192.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <link rel="icon" href="icons/icon-192.png" />
   <style>
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{
       width:100%;height:100%;
       background:#000;
       overflow:hidden;
+      touch-action:none;
     }
-    /* Player ocupa 100% da tela, vídeo preenche tudo */
     #player{
       position:fixed;inset:0;
       background:#000;
     }
+    /* O iframe ocupa 100% + extra para esconder barra do Drive */
     #vframe{
       position:absolute;
-      top:0;left:0;
-      width:100%;height:100%;
+      /* sobe 60px pra cima e cresce 120px a mais — esconde barra superior e inferior do Drive */
+      top:-60px;
+      left:0;
+      width:100%;
+      height:calc(100% + 120px);
       border:none;
       display:block;
+      pointer-events:none; /* bloqueia clique no iframe para não ativar os controles do Drive */
     }
-    /* Zonas de toque invisíveis para swipe / toque lateral */
+    /* Camada transparente por cima — captura todos os toques */
+    #overlay{
+      position:absolute;
+      inset:0;
+      z-index:10;
+      background:transparent;
+    }
+    /* Zonas de toque lateral */
     .tz{
-      position:absolute;top:0;height:100%;width:20%;
-      z-index:10;background:transparent;
+      position:absolute;top:0;height:100%;width:25%;
+      z-index:20;background:transparent;
       border:none;cursor:pointer;
       -webkit-tap-highlight-color:transparent;
       outline:none;
@@ -46,207 +56,142 @@
 <body>
 
 <div id="player">
-  <!-- autoplay=1 | mute=0 | controls=0 | rel=0 | modestbranding=1 -->
   <iframe id="vframe"
     allow="autoplay; encrypted-media; fullscreen"
     allowfullscreen>
   </iframe>
-  <!-- Toque na borda esquerda = episódio anterior -->
+  <!-- Overlay bloqueia interação com o iframe -->
+  <div id="overlay"></div>
+  <!-- Zonas de toque para trocar episódio -->
   <button class="tz" id="tz-prev" aria-label="Anterior"></button>
-  <!-- Toque na borda direita = próximo episódio -->
   <button class="tz" id="tz-next" aria-label="Próximo"></button>
 </div>
 
 <script>
 const EPS=[
-  {id:1,d:'0B_p8pzPcYi4qRXRLYXRYQWxuWVk'},
-  {id:2,d:'0B_p8pzPcYi4qZlNpNlRERkFzNTQ'},
-  {id:3,d:'0B_p8pzPcYi4qb2JUWHI0dzl2d1E'},
-  {id:4,d:'0B_p8pzPcYi4qY0dFcFRWZjBqS3M'},
-  {id:5,d:'0B_p8pzPcYi4qd2JyWGdIZ1NaeWM'},
-  {id:6,d:'0B_p8pzPcYi4qeENGNTlvcjVocTA'},
-  {id:7,d:'0B_p8pzPcYi4qazBfSUZqMkVMQmM'},
-  {id:8,d:'0B_p8pzPcYi4qdjNUQS1YWGVSZjA'},
-  {id:9,d:'0B_p8pzPcYi4qdHNzdGVPNjd0V0E'},
-  {id:10,d:'0B_p8pzPcYi4qTXVOcWRFeC1ycFk'},
-  {id:11,d:'0B_p8pzPcYi4qcnJUSUkzc1BTaUU'},
-  {id:12,d:'0B_p8pzPcYi4qZGRMZTZ0X09wTzg'},
-  {id:13,d:'0B_p8pzPcYi4qMGhZU2VGRFVYYmc'},
-  {id:14,d:'0B_p8pzPcYi4qSmF4WTNTdWRCNXc'},
-  {id:15,d:'0B_p8pzPcYi4qSW1fLXRsTDhRS1E'},
-  {id:16,d:'0B_p8pzPcYi4qekpkekxyVEFYZFE'},
-  {id:17,d:'0B_p8pzPcYi4qMGpqcDJZLVp2MkE'},
-  {id:18,d:'0B_p8pzPcYi4qSGZLcUxTYkxmcnM'},
-  {id:19,d:'0B_p8pzPcYi4qUmRieVN4MlBzcnM'},
-  {id:20,d:'0B_p8pzPcYi4qa0Jua1g0T2w2dnc'},
-  {id:21,d:'0B_p8pzPcYi4qa1dPd0lxZWtRak0'},
-  {id:22,d:'0B_p8pzPcYi4qMk1MNy03empxRVU'},
-  {id:23,d:'0B_p8pzPcYi4qUzJyeFRrVW5qSUk'},
-  {id:24,d:'0B_p8pzPcYi4qdGUyVXJiNVlXdG8'},
-  {id:25,d:'0B_p8pzPcYi4qc3hHSFh4X1hBc1U'},
-  {id:26,d:'0B_p8pzPcYi4qV25iZTZoS3BWU0U'},
-  {id:27,d:'0B_p8pzPcYi4qclJGZ012QmxBaEU'},
-  {id:28,d:'0B_p8pzPcYi4qNGdGaVpqRFNJWGs'},
-  {id:29,d:'0B_p8pzPcYi4qMzNLby03MUVWR1U'},
-  {id:30,d:'0B_p8pzPcYi4qWk9hNWxGT2w0bk0'},
-  {id:31,d:'0B_p8pzPcYi4qeXlGQ3ZqX3pVMzQ'},
-  {id:32,d:'0B_p8pzPcYi4qU3VsT0FEZEk2NkU'},
-  {id:33,d:'0B_p8pzPcYi4qT3NvbFBMWDZuQXM'},
-  {id:34,d:'0B_p8pzPcYi4qV21nWEZEXzVoV0E'},
-  {id:35,d:'0B_p8pzPcYi4qU0l3OXgwTUhET3M'},
-  {id:36,d:'0B_p8pzPcYi4qdXB4TGNOWDY1Q3M'},
-  {id:37,d:'0B_p8pzPcYi4qVEZERTRmNEdxREk'},
-  {id:38,d:'0B_p8pzPcYi4qUVdndGZhNVlZT2s'},
-  {id:39,d:'0B_p8pzPcYi4qNVZZWG1CaEVxalU'},
-  {id:40,d:'0B_p8pzPcYi4qbndPYTZmS1JGUUU'},
-  {id:41,d:'0B_p8pzPcYi4qWGlkMUNBamVCbVk'},
-  {id:42,d:'0B_p8pzPcYi4qX0EtZVhSczQwb0k'},
-  {id:43,d:'0B_p8pzPcYi4qaGJFSXRPUGhVc3M'},
-  {id:44,d:'0B_p8pzPcYi4qSjYyM2h1bC1kUUU'},
-  {id:45,d:'0B_p8pzPcYi4qNFZzcGFDSXdoV0U'},
-  {id:46,d:'0B_p8pzPcYi4qb1k4ZjNvWkZmOVU'},
-  {id:47,d:'0B_p8pzPcYi4qaEZQcVpFc2Nac2M'},
-  {id:48,d:'0B_p8pzPcYi4qQ21JOE9zeTVrZWs'},
-  {id:49,d:'0B_p8pzPcYi4qWEYtOGpWNEhXUm8'},
-  {id:50,d:'0B_p8pzPcYi4qZEI1NTlUWlVhNms'},
-  {id:51,d:'0B_p8pzPcYi4qWjVTMjlhekZMb0U'},
-  {id:52,d:'0B_p8pzPcYi4qMm1PUmpXRkQxUFU'},
-  {id:53,d:'0B_p8pzPcYi4qWnlGaW5IdFFibVE'},
-  {id:54,d:'0B_p8pzPcYi4qT2lyNkp0dHpOeUE'},
-  {id:55,d:'0B_p8pzPcYi4qUDRUeG9MNGFzUFk'},
-  {id:56,d:'0B_p8pzPcYi4qeWtMYVhCS1ROOUE'},
-  {id:57,d:'0B_p8pzPcYi4qZzFodWJiZUhTQlE'},
-  {id:58,d:'0B_p8pzPcYi4qWm9xcExoWlkyWFE'},
-  {id:59,d:'0B_p8pzPcYi4qbEk4R0VoZFhsNXM'},
-  {id:60,d:'0B_p8pzPcYi4qcFBVUkR1YjJ5T3c'},
-  {id:61,d:'0B_p8pzPcYi4qeXZXZk1VcG9ZeVk'},
-  {id:62,d:'0B_p8pzPcYi4qbUFSbVNqQm12bjQ'},
-  {id:63,d:'0B_p8pzPcYi4qYUZ1aHpKNE1sV28'},
-  {id:64,d:'0B_p8pzPcYi4qdXlzQkF6cUZqMFk'},
-  {id:65,d:'0B_p8pzPcYi4qMFE0dUl3WGJxZk0'},
-  {id:66,d:'0B_p8pzPcYi4qZXA2dElPQlZWVkk'},
-  {id:67,d:'0B_p8pzPcYi4qNHFIV1ZfaE9TQXM'},
-  {id:68,d:'0B_p8pzPcYi4qX0tYa0E3Rm41YVk'},
-  {id:69,d:'0B_p8pzPcYi4qSmM4eUZFNE4wZkk'},
-  {id:70,d:'0B_p8pzPcYi4qWUZBNk1FUnpjams'},
-  {id:71,d:'0B_p8pzPcYi4qNzZSZGFxMkZaUjA'},
-  {id:72,d:'0B_p8pzPcYi4qTHZpNXA3NjRhbWs'},
-  {id:73,d:'0B_p8pzPcYi4qcE82ckpoUzdCU2s'},
-  {id:74,d:'0B_p8pzPcYi4qZXpuWVR6MnN3bk0'},
-  {id:75,d:'0B_p8pzPcYi4qSHF4dGJEVFRrYkU'},
-  {id:76,d:'0B_p8pzPcYi4qVXJSbEloWlloYm8'},
-  {id:77,d:'0B_p8pzPcYi4qMFFHTzhWVW9pUXc'},
-  {id:78,d:'0B_p8pzPcYi4qSU45VnZSbW1Ia1E'},
-  {id:79,d:'0B_p8pzPcYi4qcFVlbzgzUlFSeXM'},
-  {id:80,d:'0B_p8pzPcYi4qOWdYbXU3UEJpM28'},
-  {id:81,d:'0B_p8pzPcYi4qWmFwb3poU3BKMFE'},
-  {id:82,d:'0B_p8pzPcYi4qb1JSdXBscGFHTEE'},
-  {id:83,d:'0B_p8pzPcYi4qVWQ0dGNzMXZkT0U'},
-  {id:84,d:'0B_p8pzPcYi4qdEYtdUxRWjJEWkE'},
-  {id:85,d:'0B_p8pzPcYi4qSm5GNjNhVHBNNVE'},
-  {id:86,d:'0B_p8pzPcYi4qNHVZSjhXRFpzTkU'},
-  {id:87,d:'0B_p8pzPcYi4qbEloTjF3dER0Ync'},
-  {id:88,d:'0B_p8pzPcYi4qUHZ5VmhRTldSbjQ'},
-  {id:89,d:'0B_p8pzPcYi4qZm9fcElYc0NJVnM'},
-  {id:90,d:'0B_p8pzPcYi4qSFlFa1dqcjg2MnM'},
-  {id:91,d:'0B_p8pzPcYi4qUEdUNW50c3RxUkk'},
-  {id:92,d:'0B_p8pzPcYi4qWEZhb3pVajhvYkk'},
-  {id:93,d:'0B_p8pzPcYi4qdE45TE1pQWdxZlE'},
-  {id:94,d:'0B_p8pzPcYi4qSWI3dE4ybzVRYzA'},
-  {id:95,d:'0B_p8pzPcYi4qOXVKYVZTOFhBY2M'},
-  {id:96,d:'0B_p8pzPcYi4qWVdoMlp1bGxiVms'},
-  {id:97,d:'0B_p8pzPcYi4qeHR5ckk1cGFYVk0'},
-  {id:98,d:'0B_p8pzPcYi4qcHVNcVJhdDR5dVE'},
-  {id:99,d:'0B_p8pzPcYi4qd3Y2N3dhWm1CcVE'},
-  {id:100,d:'0B_p8pzPcYi4qREd1NmVXNlBuYzg'},
-  {id:101,d:'0B_p8pzPcYi4qTE9iQW5xRXFScms'},
-  {id:102,d:'0B_p8pzPcYi4qYVFfSFh2NEpnbjA'},
-  {id:103,d:'0B_p8pzPcYi4qM1ZfbmtUd0dBaVE'},
-  {id:104,d:'0B_p8pzPcYi4qQ0hBM2ZFcW9zYXc'},
-  {id:105,d:'0B_p8pzPcYi4qZk9oSHpocE9EeUU'},
-  {id:106,d:'0B_p8pzPcYi4qUmk0SnIwb0ZhbkE'},
-  {id:107,d:'0B_p8pzPcYi4qUEpfZkJCS0hMRnM'},
-  {id:108,d:'0B_p8pzPcYi4qY1ZadHJKejVsaGc'},
-  {id:109,d:'0B_p8pzPcYi4qNE1mdEdpWlVhQVU'},
-  {id:110,d:'0B_p8pzPcYi4qcUJLT3BZNlBKZlU'},
-  {id:111,d:'0B_p8pzPcYi4qbzFKNEZHZzlIbHM'},
-  {id:112,d:'0B_p8pzPcYi4qX0xpWEYzOWNUaXM'},
-  {id:113,d:'0B_p8pzPcYi4qUThqeHVYYVZoakE'},
-  {id:114,d:'0B_p8pzPcYi4qZjlHWW84Wm9sUEE'},
-  {id:115,d:'0B_p8pzPcYi4qeXBSZVZub2hVUFU'},
-  {id:116,d:'0B_p8pzPcYi4qOHFtSGFXT3VWYzQ'},
-  {id:117,d:'0B_p8pzPcYi4qRnV5c3d3ZnJBcFU'},
-  {id:118,d:'0B_p8pzPcYi4qdVRGMlp2ZFpBUXM'},
-  {id:119,d:'0B_p8pzPcYi4qUlFUckU1TmtNQ2s'},
-  {id:120,d:'0B_p8pzPcYi4qZE9PZXR6NlQ2aWs'},
-  {id:121,d:'0B_p8pzPcYi4qWjNOaFZud0lBUXM'},
-  {id:122,d:'0B_p8pzPcYi4qaWJPbWJYQlBhUHc'},
-  {id:123,d:'0B_p8pzPcYi4qZXJvNUlUMFVKWms'},
-  {id:124,d:'0B_p8pzPcYi4qbnpTMDFadExuSnM'},
-  {id:125,d:'0B_p8pzPcYi4qakE3ZU10Q2RKZVk'},
-  {id:126,d:'0B_p8pzPcYi4qSUtjX3AzWXBaems'},
-  {id:127,d:'0B_p8pzPcYi4qd1dKRlBEdWJmZEU'},
-  {id:128,d:'0B_p8pzPcYi4qcVZhcVl6Ym9Hbms'},
-  {id:129,d:'0B_p8pzPcYi4qdGxQRjVldzFUNFU'},
-  {id:130,d:'0B_p8pzPcYi4qYWdBRllPWjYzUmc'},
-  {id:131,d:'0B_p8pzPcYi4qOFZLY2l1elZuNHM'},
-  {id:132,d:'0B_p8pzPcYi4qQ1VBaURqZXdHTG8'},
-  {id:133,d:'0B_p8pzPcYi4qbEltbUhHZW5lMXM'},
-  {id:134,d:'0B_p8pzPcYi4qUXFxb2FDd0ZsWHM'},
-  {id:135,d:'0B_p8pzPcYi4qdnozaVlGUl9HYWs'},
-  {id:136,d:'0B_p8pzPcYi4qME80cnY1d1p6NkE'},
-  {id:137,d:'0B_p8pzPcYi4qeEF3RFhPVzhaUkE'},
-  {id:138,d:'0B_p8pzPcYi4qUGlUSldyOVdoQlk'},
-  {id:139,d:'0B_p8pzPcYi4qeHR3VlliaHlTVWs'},
-  {id:140,d:'0B_p8pzPcYi4qcWMzYWlVMExUa2M'},
-  {id:141,d:'0B_p8pzPcYi4qZjhOdGJiR3ZnYWs'},
-  {id:142,d:'0B_p8pzPcYi4qVzJvOWdScVBuMVU'},
-  {id:143,d:'0B_p8pzPcYi4qUm10WFMwNHVzems'},
-  {id:144,d:'0B_p8pzPcYi4qbFZLcGNXTzlabzg'},
+  '0B_p8pzPcYi4qRXRLYXRYQWxuWVk','0B_p8pzPcYi4qZlNpNlRERkFzNTQ',
+  '0B_p8pzPcYi4qb2JUWHI0dzl2d1E','0B_p8pzPcYi4qY0dFcFRWZjBqS3M',
+  '0B_p8pzPcYi4qd2JyWGdIZ1NaeWM','0B_p8pzPcYi4qeENGNTlvcjVocTA',
+  '0B_p8pzPcYi4qazBfSUZqMkVMQmM','0B_p8pzPcYi4qdjNUQS1YWGVSZjA',
+  '0B_p8pzPcYi4qdHNzdGVPNjd0V0E','0B_p8pzPcYi4qTXVOcWRFeC1ycFk',
+  '0B_p8pzPcYi4qcnJUSUkzc1BTaUU','0B_p8pzPcYi4qZGRMZTZ0X09wTzg',
+  '0B_p8pzPcYi4qMGhZU2VGRFVYYmc','0B_p8pzPcYi4qSmF4WTNTdWRCNXc',
+  '0B_p8pzPcYi4qSW1fLXRsTDhRS1E','0B_p8pzPcYi4qekpkekxyVEFYZFE',
+  '0B_p8pzPcYi4qMGpqcDJZLVp2MkE','0B_p8pzPcYi4qSGZLcUxTYkxmcnM',
+  '0B_p8pzPcYi4qUmRieVN4MlBzcnM','0B_p8pzPcYi4qa0Jua1g0T2w2dnc',
+  '0B_p8pzPcYi4qa1dPd0lxZWtRak0','0B_p8pzPcYi4qMk1MNy03empxRVU',
+  '0B_p8pzPcYi4qUzJyeFRrVW5qSUk','0B_p8pzPcYi4qdGUyVXJiNVlXdG8',
+  '0B_p8pzPcYi4qc3hHSFh4X1hBc1U','0B_p8pzPcYi4qV25iZTZoS3BWU0U',
+  '0B_p8pzPcYi4qclJGZ012QmxBaEU','0B_p8pzPcYi4qNGdGaVpqRFNJWGs',
+  '0B_p8pzPcYi4qMzNLby03MUVWR1U','0B_p8pzPcYi4qWk9hNWxGT2w0bk0',
+  '0B_p8pzPcYi4qeXlGQ3ZqX3pVMzQ','0B_p8pzPcYi4qU3VsT0FEZEk2NkU',
+  '0B_p8pzPcYi4qT3NvbFBMWDZuQXM','0B_p8pzPcYi4qV21nWEZEXzVoV0E',
+  '0B_p8pzPcYi4qU0l3OXgwTUhET3M','0B_p8pzPcYi4qdXB4TGNOWDY1Q3M',
+  '0B_p8pzPcYi4qVEZERTRmNEdxREk','0B_p8pzPcYi4qUVdndGZhNVlZT2s',
+  '0B_p8pzPcYi4qNVZZWG1CaEVxalU','0B_p8pzPcYi4qbndPYTZmS1JGUUU',
+  '0B_p8pzPcYi4qWGlkMUNBamVCbVk','0B_p8pzPcYi4qX0EtZVhSczQwb0k',
+  '0B_p8pzPcYi4qaGJFSXRPUGhVc3M','0B_p8pzPcYi4qSjYyM2h1bC1kUUU',
+  '0B_p8pzPcYi4qNFZzcGFDSXdoV0U','0B_p8pzPcYi4qb1k4ZjNvWkZmOVU',
+  '0B_p8pzPcYi4qaEZQcVpFc2Nac2M','0B_p8pzPcYi4qQ21JOE9zeTVrZWs',
+  '0B_p8pzPcYi4qWEYtOGpWNEhXUm8','0B_p8pzPcYi4qZEI1NTlUWlVhNms',
+  '0B_p8pzPcYi4qWjVTMjlhekZMb0U','0B_p8pzPcYi4qMm1PUmpXRkQxUFU',
+  '0B_p8pzPcYi4qWnlGaW5IdFFibVE','0B_p8pzPcYi4qT2lyNkp0dHpOeUE',
+  '0B_p8pzPcYi4qUDRUeG9MNGFzUFk','0B_p8pzPcYi4qeWtMYVhCS1ROOUE',
+  '0B_p8pzPcYi4qZzFodWJiZUhTQlE','0B_p8pzPcYi4qWm9xcExoWlkyWFE',
+  '0B_p8pzPcYi4qbEk4R0VoZFhsNXM','0B_p8pzPcYi4qcFBVUkR1YjJ5T3c',
+  '0B_p8pzPcYi4qeXZXZk1VcG9ZeVk','0B_p8pzPcYi4qbUFSbVNqQm12bjQ',
+  '0B_p8pzPcYi4qYUZ1aHpKNE1sV28','0B_p8pzPcYi4qdXlzQkF6cUZqMFk',
+  '0B_p8pzPcYi4qMFE0dUl3WGJxZk0','0B_p8pzPcYi4qZXA2dElPQlZWVkk',
+  '0B_p8pzPcYi4qNHFIV1ZfaE9TQXM','0B_p8pzPcYi4qX0tYa0E3Rm41YVk',
+  '0B_p8pzPcYi4qSmM4eUZFNE4wZkk','0B_p8pzPcYi4qWUZBNk1FUnpjams',
+  '0B_p8pzPcYi4qNzZSZGFxMkZaUjA','0B_p8pzPcYi4qTHZpNXA3NjRhbWs',
+  '0B_p8pzPcYi4qcE82ckpoUzdCU2s','0B_p8pzPcYi4qZXpuWVR6MnN3bk0',
+  '0B_p8pzPcYi4qSHF4dGJEVFRrYkU','0B_p8pzPcYi4qVXJSbEloWlloYm8',
+  '0B_p8pzPcYi4qMFFHTzhWVW9pUXc','0B_p8pzPcYi4qSU45VnZSbW1Ia1E',
+  '0B_p8pzPcYi4qcFVlbzgzUlFSeXM','0B_p8pzPcYi4qOWdYbXU3UEJpM28',
+  '0B_p8pzPcYi4qWmFwb3poU3BKMFE','0B_p8pzPcYi4qb1JSdXBscGFHTEE',
+  '0B_p8pzPcYi4qVWQ0dGNzMXZkT0U','0B_p8pzPcYi4qdEYtdUxRWjJEWkE',
+  '0B_p8pzPcYi4qSm5GNjNhVHBNNVE','0B_p8pzPcYi4qNHVZSjhXRFpzTkU',
+  '0B_p8pzPcYi4qbEloTjF3dER0Ync','0B_p8pzPcYi4qUHZ5VmhRTldSbjQ',
+  '0B_p8pzPcYi4qZm9fcElYc0NJVnM','0B_p8pzPcYi4qSFlFa1dqcjg2MnM',
+  '0B_p8pzPcYi4qUEdUNW50c3RxUkk','0B_p8pzPcYi4qWEZhb3pVajhvYkk',
+  '0B_p8pzPcYi4qdE45TE1pQWdxZlE','0B_p8pzPcYi4qSWI3dE4ybzVRYzA',
+  '0B_p8pzPcYi4qOXVKYVZTOFhBY2M','0B_p8pzPcYi4qWVdoMlp1bGxiVms',
+  '0B_p8pzPcYi4qeHR5ckk1cGFYVk0','0B_p8pzPcYi4qcHVNcVJhdDR5dVE',
+  '0B_p8pzPcYi4qd3Y2N3dhWm1CcVE','0B_p8pzPcYi4qREd1NmVXNlBuYzg',
+  '0B_p8pzPcYi4qTE9iQW5xRXFScms','0B_p8pzPcYi4qYVFfSFh2NEpnbjA',
+  '0B_p8pzPcYi4qM1ZfbmtUd0dBaVE','0B_p8pzPcYi4qQ0hBM2ZFcW9zYXc',
+  '0B_p8pzPcYi4qZk9oSHpocE9EeUU','0B_p8pzPcYi4qUmk0SnIwb0ZhbkE',
+  '0B_p8pzPcYi4qUEpfZkJCS0hMRnM','0B_p8pzPcYi4qY1ZadHJKejVsaGc',
+  '0B_p8pzPcYi4qNE1mdEdpWlVhQVU','0B_p8pzPcYi4qcUJLT3BZNlBKZlU',
+  '0B_p8pzPcYi4qbzFKNEZHZzlIbHM','0B_p8pzPcYi4qX0xpWEYzOWNUaXM',
+  '0B_p8pzPcYi4qUThqeHVYYVZoakE','0B_p8pzPcYi4qZjlHWW84Wm9sUEE',
+  '0B_p8pzPcYi4qeXBSZVZub2hVUFU','0B_p8pzPcYi4qOHFtSGFXT3VWYzQ',
+  '0B_p8pzPcYi4qRnV5c3d3ZnJBcFU','0B_p8pzPcYi4qdVRGMlp2ZFpBUXM',
+  '0B_p8pzPcYi4qUlFUckU1TmtNQ2s','0B_p8pzPcYi4qZE9PZXR6NlQ2aWs',
+  '0B_p8pzPcYi4qWjNOaFZud0lBUXM','0B_p8pzPcYi4qaWJPbWJYQlBhUHc',
+  '0B_p8pzPcYi4qZXJvNUlUMFVKWms','0B_p8pzPcYi4qbnpTMDFadExuSnM',
+  '0B_p8pzPcYi4qakE3ZU10Q2RKZVk','0B_p8pzPcYi4qSUtjX3AzWXBaems',
+  '0B_p8pzPcYi4qd1dKRlBEdWJmZEU','0B_p8pzPcYi4qcVZhcVl6Ym9Hbms',
+  '0B_p8pzPcYi4qdGxQRjVldzFUNFU','0B_p8pzPcYi4qYWdBRllPWjYzUmc',
+  '0B_p8pzPcYi4qOFZLY2l1elZuNHM','0B_p8pzPcYi4qQ1VBaURqZXdHTG8',
+  '0B_p8pzPcYi4qbEltbUhHZW5lMXM','0B_p8pzPcYi4qUXFxb2FDd0ZsWHM',
+  '0B_p8pzPcYi4qdnozaVlGUl9HYWs','0B_p8pzPcYi4qME80cnY1d1p6NkE',
+  '0B_p8pzPcYi4qeEF3RFhPVzhaUkE','0B_p8pzPcYi4qUGlUSldyOVdoQlk',
+  '0B_p8pzPcYi4qeHR3VlliaHlTVWs','0B_p8pzPcYi4qcWMzYWlVMExUa2M',
+  '0B_p8pzPcYi4qZjhOdGJiR3ZnYWs','0B_p8pzPcYi4qVzJvOWdScVBuMVU',
+  '0B_p8pzPcYi4qUm10WFMwNHVzems','0B_p8pzPcYi4qbFZLcGNXTzlabzg',
 ];
 
 const KEY = 'chavescom_ep';
-let cur = parseInt(localStorage.getItem(KEY)||'0');
+let cur = parseInt(localStorage.getItem(KEY) || '0');
 
-function load(idx, autoplay){
-  if(idx < 0) idx = EPS.length - 1;
-  if(idx >= EPS.length) idx = 0;
+const frame = document.getElementById('vframe');
+
+function load(idx) {
+  if (idx < 0) idx = EPS.length - 1;
+  if (idx >= EPS.length) idx = 0;
   cur = idx;
   localStorage.setItem(KEY, cur);
-  const ep = EPS[cur];
-  // autoplay=1 muda o vídeo automaticamente
-  const src = `https://drive.google.com/file/d/${ep.d}/preview?autoplay=${autoplay?1:1}`;
-  document.getElementById('vframe').src = src;
+  // autoplay=1, controls=0 esconde os controles do Drive
+  frame.src = 'https://drive.google.com/file/d/' + EPS[cur] + '/preview?autoplay=1&controls=0';
 }
 
-function next(){ load(cur+1, true); }
-function prev(){ load(cur-1, true); }
+function next() { load(cur + 1); }
+function prev() { load(cur - 1); }
 
-// Toque nos lados
+// Botões laterais
 document.getElementById('tz-prev').addEventListener('click', prev);
 document.getElementById('tz-next').addEventListener('click', next);
 
-// Teclado / controle remoto (setas)
-document.addEventListener('keydown', function(e){
-  if(e.key === 'ArrowRight' || e.keyCode === 39){ e.preventDefault(); next(); }
-  if(e.key === 'ArrowLeft'  || e.keyCode === 37){ e.preventDefault(); prev(); }
+// Controle remoto / teclado
+document.addEventListener('keydown', function(e) {
+  if (e.key === 'ArrowRight' || e.keyCode === 39) { e.preventDefault(); next(); }
+  if (e.key === 'ArrowLeft'  || e.keyCode === 37) { e.preventDefault(); prev(); }
+  if (e.key === 'ArrowUp'    || e.keyCode === 38) { e.preventDefault(); next(); }
+  if (e.key === 'ArrowDown'  || e.keyCode === 40) { e.preventDefault(); prev(); }
 });
 
 // Swipe horizontal
-let sx = null;
-document.addEventListener('touchstart', function(e){ sx = e.touches[0].clientX; }, {passive:true});
-document.addEventListener('touchend', function(e){
-  if(sx === null) return;
+let sx = null, sy = null;
+document.addEventListener('touchstart', function(e) {
+  sx = e.touches[0].clientX;
+  sy = e.touches[0].clientY;
+}, {passive: true});
+
+document.addEventListener('touchend', function(e) {
+  if (sx === null) return;
   const dx = e.changedTouches[0].clientX - sx;
-  if(Math.abs(dx) > 60){
-    if(dx < 0) next();
+  const dy = e.changedTouches[0].clientY - sy;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+    if (dx < 0) next();
     else prev();
   }
-  sx = null;
-}, {passive:true});
+  sx = null; sy = null;
+}, {passive: true});
 
-// Iniciar no último episódio salvo, com autoplay
-load(cur, true);
+// Iniciar
+load(cur);
 </script>
 </body>
 </html>
