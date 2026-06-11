@@ -13,36 +13,40 @@
     html,body{
       width:100%;height:100%;
       background:#000;
-      overflow:hidden;
+      overflow:hidden; /* CORTA qualquer coisa fora da tela */
       touch-action:none;
-      /* Suavização de renderização */
-      -webkit-font-smoothing:antialiased;
-      -moz-osx-font-smoothing:grayscale;
     }
     #player{
-      position:fixed;inset:0;
+      position:fixed;
+      top:0;left:0;
+      width:100%;height:100%;
       background:#000;
-      /* GPU compositing */
+      overflow:hidden; /* dupla garantia */
       -webkit-transform:translateZ(0);
       transform:translateZ(0);
-      will-change:transform;
+    }
+    /* Container que esconde as barras do Drive SEM vazar pra fora */
+    #clip{
+      position:absolute;
+      /* Recua as bordas: corta barra superior e inferior do Drive */
+      top:0;left:0;
+      width:100%;height:100%;
+      overflow:hidden; /* tudo que sair aqui é cortado */
     }
     #vframe{
       position:absolute;
-      /* Expande além da tela para cortar barras do Drive */
-      top:-70px;
-      left:-2px;
-      width:calc(100% + 4px);
-      height:calc(100% + 140px);
+      /* Expande só pra dentro do clip — não vaza pra fora da tela */
+      top:-65px;
+      left:0;
+      width:100%;
+      height:calc(100% + 130px);
       border:none;
       display:block;
-      /* Melhor qualidade de renderização do vídeo */
       -webkit-transform:translateZ(0);
       transform:translateZ(0);
-      image-rendering:-webkit-optimize-contrast;
       will-change:transform;
     }
-    /* Overlay captura todos os toques — nenhum chega no iframe */
+    /* Overlay invisível — bloqueia toques no iframe */
     #overlay{
       position:absolute;
       inset:0;
@@ -50,6 +54,7 @@
       background:transparent;
       -webkit-tap-highlight-color:transparent;
     }
+    /* Zonas laterais de troca de episódio */
     .tz{
       position:absolute;top:0;height:100%;width:25%;
       z-index:20;background:transparent;
@@ -63,10 +68,12 @@
 </head>
 <body>
 <div id="player">
-  <iframe id="vframe"
-    allow="autoplay; encrypted-media; fullscreen"
-    allowfullscreen>
-  </iframe>
+  <div id="clip">
+    <iframe id="vframe"
+      allow="autoplay; encrypted-media; fullscreen"
+      allowfullscreen>
+    </iframe>
+  </div>
   <div id="overlay"></div>
   <button class="tz" id="tz-prev"></button>
   <button class="tz" id="tz-next"></button>
@@ -152,12 +159,11 @@ let cur=parseInt(localStorage.getItem(KEY)||'0');
 const frame=document.getElementById('vframe');
 
 function load(idx){
-  if(idx<0) idx=EPS.length-1;
-  if(idx>=EPS.length) idx=0;
+  if(idx<0)idx=EPS.length-1;
+  if(idx>=EPS.length)idx=0;
   cur=idx;
   localStorage.setItem(KEY,cur);
-  // Parâmetros para máxima qualidade: autoplay, sem controles, sem sugestões
-  frame.src='https://drive.google.com/file/d/'+EPS[cur]+'/preview?autoplay=1&controls=0&modestbranding=1&rel=0&iv_load_policy=3';
+  frame.src='https://drive.google.com/file/d/'+EPS[cur]+'/preview?autoplay=1&controls=0';
 }
 
 function next(){load(cur+1);}
