@@ -22,11 +22,9 @@ public class MainActivity extends Activity {
 
         getWindow().setFlags(
             WindowManager.LayoutParams.FLAG_FULLSCREEN |
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
             WindowManager.LayoutParams.FLAG_FULLSCREEN |
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON |
-            WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
+            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
 
         int uiFlags = View.SYSTEM_UI_FLAG_FULLSCREEN
@@ -38,14 +36,11 @@ public class MainActivity extends Activity {
         getWindow().getDecorView().setSystemUiVisibility(uiFlags);
         getWindow().setBackgroundDrawableResource(android.R.color.black);
 
-        // IMPORTANTE para TV Box: usar LAYER_TYPE_SOFTWARE permite que
-        // o WebView antigo renderize o vídeo corretamente via SurfaceView
-        WebView.setWebContentsDebuggingEnabled(false);
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
 
-        // TV Box precisa de SOFTWARE para renderizar vídeo no iframe
-        // Hardware layer em TV Box causa tela preta no vídeo
+        // SOFTWARE rendering — único modo que funciona em TV Box antigo
+        // com hardwareAccelerated=false no Manifest, sem conflito
         webView.setLayerType(View.LAYER_TYPE_SOFTWARE, null);
 
         setContentView(webView);
@@ -66,17 +61,12 @@ public class MainActivity extends Activity {
         s.setDisplayZoomControls(false);
         s.setSupportZoom(false);
         s.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
-
-        // User-agent desktop para melhor qualidade no Drive
-        String ua = s.getUserAgentString();
-        s.setUserAgentString(ua + " Chrome/120.0.0.0");
-
         s.setDefaultTextEncodingName("UTF-8");
 
         final int finalUiFlags = uiFlags;
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public void onPageFinished(android.webkit.WebView view, String url) {
+            public void onPageFinished(WebView view, String url) {
                 getWindow().getDecorView().setSystemUiVisibility(finalUiFlags);
             }
         });
