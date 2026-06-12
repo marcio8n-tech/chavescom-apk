@@ -8,107 +8,121 @@
     *{box-sizing:border-box;margin:0;padding:0}
     html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:sans-serif}
 
-    /* Player ocupa tela toda */
-    #player{position:fixed;inset:0;background:#000;display:flex;flex-direction:column}
+    #player{position:fixed;inset:0;background:#000}
 
-    /* Barra de título */
+    /* Barra de título — some após 4s */
     #topbar{
       position:absolute;top:0;left:0;right:0;
-      background:linear-gradient(to bottom,rgba(0,0,0,0.85),transparent);
-      padding:10px 16px;z-index:30;
-      display:flex;align-items:center;justify-content:space-between;
-      transition:opacity 0.4s;
+      background:linear-gradient(to bottom,rgba(0,0,0,0.9) 0%,transparent 100%);
+      padding:12px 16px 28px;
+      z-index:30;
+      opacity:1;
+      transition:opacity 0.6s ease;
+      pointer-events:auto;
+      display:flex;align-items:center;gap:10px;
     }
-    #topbar.hidden{opacity:0;pointer-events:none}
-    #ep-title{color:#fff;font-size:17px;font-weight:600;text-shadow:0 1px 4px #000;flex:1}
-    #ep-counter{color:rgba(255,255,255,0.7);font-size:14px;margin-left:12px;white-space:nowrap}
+    #topbar.oculto{
+      opacity:0;
+      pointer-events:none;
+    }
+    #ep-title{color:#fff;font-size:16px;font-weight:700;text-shadow:0 1px 4px #000;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    #ep-counter{color:rgba(255,255,255,0.65);font-size:13px;white-space:nowrap}
+    #btn-list{
+      background:rgba(255,255,255,0.18);border:none;color:#fff;
+      border-radius:6px;padding:5px 11px;font-size:13px;cursor:pointer;
+      flex-shrink:0;
+    }
 
     /* iframe ocupa tudo */
     #frame{
-      width:100%;height:100%;border:none;
-      background:#000;display:block;
+      position:absolute;inset:0;
+      width:100%;height:100%;
+      border:none;background:#000;
     }
 
-    /* Zona de toque laterais (20% cada lado) */
-    .tz{
-      position:absolute;top:0;height:100%;width:18%;
-      z-index:20;background:transparent;border:none;
-      cursor:pointer;-webkit-tap-highlight-color:transparent;outline:none;
+    /* Overlay transparente para capturar toques sem bloquear o iframe */
+    #overlay{
+      position:absolute;inset:0;
+      z-index:20;
+      background:transparent;
+      /* Permite toque passar pro iframe via pointer-events none quando não precisa */
     }
-    #tz-prev{left:0}
-    #tz-next{right:0}
 
-    /* Tela de loading */
+    /* Loading */
     #loading{
-      display:flex;position:absolute;inset:0;
-      align-items:center;justify-content:center;
-      flex-direction:column;gap:14px;
-      background:#000;color:#fff;font-size:18px;z-index:40;
+      position:absolute;inset:0;z-index:40;
+      background:#000;
+      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
+      color:#fff;font-size:16px;
       transition:opacity 0.5s;
     }
-    #loading.hidden{opacity:0;pointer-events:none}
+    #loading.oculto{opacity:0;pointer-events:none}
     .spinner{
-      width:44px;height:44px;border:4px solid rgba(255,255,255,0.2);
-      border-top-color:#fff;border-radius:50%;
+      width:42px;height:42px;
+      border:4px solid rgba(255,255,255,0.15);
+      border-top-color:#e55000;
+      border-radius:50%;
       animation:spin 0.8s linear infinite;
     }
     @keyframes spin{to{transform:rotate(360deg)}}
 
-    /* Seletor de episódios */
+    /* Lista de episódios */
     #ep-list{
-      display:none;position:absolute;inset:0;
-      background:rgba(0,0,0,0.95);z-index:50;
-      overflow-y:auto;padding:16px;
+      display:none;
+      position:absolute;inset:0;z-index:50;
+      background:rgba(0,0,0,0.96);
+      overflow-y:auto;
+      padding:16px;
     }
     #ep-list.show{display:block}
-    #ep-list h2{color:#fff;margin-bottom:14px;font-size:20px}
+    #ep-list h2{color:#fff;margin-bottom:14px;font-size:18px;font-weight:700}
     .ep-item{
-      padding:12px 16px;margin-bottom:6px;
-      background:rgba(255,255,255,0.08);border-radius:8px;
-      color:#fff;font-size:15px;cursor:pointer;
+      padding:11px 14px;margin-bottom:5px;
+      background:rgba(255,255,255,0.07);
+      border-radius:8px;
+      color:#fff;font-size:14px;cursor:pointer;
       display:flex;align-items:center;gap:10px;
+      border:2px solid transparent;
     }
-    .ep-item:hover,.ep-item.active{background:rgba(229,80,0,0.7)}
-    .ep-num{color:rgba(255,255,255,0.5);font-size:13px;min-width:32px}
-
-    /* Botão de lista */
-    #btn-list{
-      background:rgba(255,255,255,0.15);border:none;color:#fff;
-      border-radius:6px;padding:4px 10px;font-size:13px;cursor:pointer;
-    }
+    .ep-item.active{background:rgba(229,80,0,0.5);border-color:#e55000}
+    .ep-num{color:rgba(255,255,255,0.4);font-size:12px;min-width:28px}
   </style>
 </head>
 <body>
 <div id="player">
+
   <div id="loading">
     <div class="spinner"></div>
-    <span id="loading-txt">Carregando episódio...</span>
+    <span id="loading-txt">Carregando...</span>
   </div>
 
+  <!-- O iframe fica atrás do overlay -->
+  <iframe id="frame"
+    allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
+    allowfullscreen
+    sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+  ></iframe>
+
+  <!-- Overlay captura toques para mostrar UI -->
+  <div id="overlay" onclick="tocou()"></div>
+
+  <!-- Barra de informações -->
   <div id="topbar">
     <span id="ep-title">Chaves.com</span>
     <span id="ep-counter"></span>
-    <button id="btn-list" onclick="toggleList()">☰ Eps</button>
+    <button id="btn-list" onclick="event.stopPropagation();toggleList()">☰</button>
   </div>
 
-  <iframe id="frame"
-    allow="autoplay; encrypted-media; fullscreen"
-    allowfullscreen
-    sandbox="allow-scripts allow-same-origin allow-popups allow-presentation"
-  ></iframe>
-
-  <button class="tz" id="tz-prev"></button>
-  <button class="tz" id="tz-next"></button>
 </div>
 
 <!-- Lista de episódios -->
 <div id="ep-list">
-  <h2>Episódios</h2>
+  <h2>📺 Episódios</h2>
   <div id="ep-items"></div>
 </div>
 
 <script>
-const EPS = [
+var EPS = [
   {id:1, title:"A Casa Da Bruxa", driveId:"0B_p8pzPcYi4qRXRLYXRYQWxuWVk"},
   {id:2, title:"A Festa Da Amizade", driveId:"0B_p8pzPcYi4qZlNpNlRERkFzNTQ"},
   {id:3, title:"A Fonte Dos Desejos", driveId:"0B_p8pzPcYi4qb2JUWHI0dzl2d1E"},
@@ -255,120 +269,182 @@ const EPS = [
   {id:144, title:"O Despejo Do Seu Madruga II", driveId:"0B95M8ccQx8-LUE9KcHY1YUR4RlU"},
 ];
 
-const KEY = 'chavescom_ep';
-let cur = parseInt(localStorage.getItem(KEY) || '0');
-if (cur >= EPS.length) cur = 0;
+var KEY = 'chavescom_ep';
+var cur  = parseInt(localStorage.getItem(KEY) || '0');
+if (isNaN(cur) || cur < 0 || cur >= EPS.length) cur = 0;
 
-const frame    = document.getElementById('frame');
-const title    = document.getElementById('ep-title');
-const counter  = document.getElementById('ep-counter');
-const loading  = document.getElementById('loading');
-const loadTxt  = document.getElementById('loading-txt');
-const topbar   = document.getElementById('topbar');
-const epList   = document.getElementById('ep-list');
-const epItems  = document.getElementById('ep-items');
+var frame    = document.getElementById('frame');
+var titleEl  = document.getElementById('ep-title');
+var counterEl= document.getElementById('ep-counter');
+var loading  = document.getElementById('loading');
+var loadTxt  = document.getElementById('loading-txt');
+var topbar   = document.getElementById('topbar');
+var epList   = document.getElementById('ep-list');
+var epItems  = document.getElementById('ep-items');
+var overlay  = document.getElementById('overlay');
 
-let topbarTimer = null;
-let listVisible = false;
+var topbarTimer = null;
+var listVisible = false;
 
-// Gerar lista de episódios
-EPS.forEach((ep, i) => {
-  const div = document.createElement('div');
+// -------- Gerar lista --------
+EPS.forEach(function(ep, i) {
+  var div = document.createElement('div');
   div.className = 'ep-item' + (i === cur ? ' active' : '');
   div.id = 'epitem-' + i;
-  div.innerHTML = `<span class="ep-num">#${ep.id}</span><span>${ep.title}</span>`;
-  div.onclick = () => { load(i); toggleList(); };
+  div.innerHTML = '<span class="ep-num">#' + ep.id + '</span><span>' + ep.title + '</span>';
+  div.addEventListener('click', function() { load(i); toggleList(); });
   epItems.appendChild(div);
 });
 
-function drivePreviewUrl(driveId) {
-  return 'https://drive.google.com/file/d/' + driveId + '/preview';
+// -------- Player --------
+function driveUrl(driveId) {
+  // &rm=minimal remove barra inferior do Drive (mais limpo na TV)
+  return 'https://drive.google.com/file/d/' + driveId + '/preview?rm=minimal';
 }
 
 function load(idx) {
   if (idx < 0) idx = EPS.length - 1;
   if (idx >= EPS.length) idx = 0;
   cur = idx;
-  localStorage.setItem(KEY, cur);
+  localStorage.setItem(KEY, String(cur));
 
-  const ep = EPS[cur];
-  title.textContent = ep.title;
-  counter.textContent = (cur + 1) + ' / ' + EPS.length;
+  var ep = EPS[cur];
+  titleEl.textContent  = ep.title;
+  counterEl.textContent = (cur + 1) + ' / ' + EPS.length;
 
   // Atualizar destaque na lista
-  document.querySelectorAll('.ep-item').forEach(el => el.classList.remove('active'));
-  const active = document.getElementById('epitem-' + cur);
-  if (active) active.classList.add('active');
+  var items = document.querySelectorAll('.ep-item');
+  for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
+  var activeEl = document.getElementById('epitem-' + cur);
+  if (activeEl) activeEl.classList.add('active');
 
-  // Mostrar loading
-  loading.classList.remove('hidden');
-  loadTxt.textContent = 'Carregando ' + ep.title + '...';
+  // Loading visível
+  loading.classList.remove('oculto');
+  loadTxt.textContent = ep.title;
+
+  // Esconder overlay durante carga para não bloquear o iframe
+  overlay.style.pointerEvents = 'none';
 
   // Carregar iframe
-  frame.src = drivePreviewUrl(ep.driveId);
+  frame.src = '';
+  setTimeout(function() {
+    frame.src = driveUrl(ep.driveId);
+  }, 80);
 
-  // Mostrar topbar por 4s
-  showTopbar();
+  // Mostrar topbar
+  mostrarTopbar();
 }
 
-function showTopbar() {
-  topbar.classList.remove('hidden');
+function mostrarTopbar() {
+  topbar.classList.remove('oculto');
   clearTimeout(topbarTimer);
-  topbarTimer = setTimeout(() => topbar.classList.add('hidden'), 4000);
+  topbarTimer = setTimeout(function() {
+    topbar.classList.add('oculto');
+  }, 4000); // some em 4 segundos
+}
+
+function tocou() {
+  // Toque no overlay: mostrar topbar e depois liberar overlay para o iframe
+  mostrarTopbar();
+  overlay.style.pointerEvents = 'none';
+  setTimeout(function() {
+    overlay.style.pointerEvents = 'auto';
+  }, 4100);
 }
 
 // Esconder loading quando iframe carrega
-frame.addEventListener('load', () => {
-  setTimeout(() => loading.classList.add('hidden'), 800);
-  showTopbar();
+frame.addEventListener('load', function() {
+  // Aguardar um pouco para o player interno do Drive renderizar
+  setTimeout(function() {
+    loading.classList.add('oculto');
+    // Tentar autoplay: injetar clique no play button do Drive via postMessage
+    tryAutoplay();
+  }, 1500);
+
+  // Reativar overlay após carga
+  setTimeout(function() {
+    overlay.style.pointerEvents = 'auto';
+  }, 2000);
+
+  mostrarTopbar();
 });
 
-function next() { load(cur + 1); }
-function prev() { load(cur - 1); }
+function tryAutoplay() {
+  // O player do Google Drive aceita postMessage para controle
+  try {
+    frame.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
+  } catch(e) {}
+  // Também tentar via evento sintético — simular clique no centro do iframe
+  // A WebView Android bloqueia autoplay sem gesto do usuário,
+  // mas podemos simular um touch event via JS no documento pai
+  try {
+    var rect = frame.getBoundingClientRect();
+    var cx = rect.left + rect.width  / 2;
+    var cy = rect.top  + rect.height / 2;
+    var el = document.elementFromPoint(cx, cy);
+    if (el) {
+      // Disparar touchstart + touchend simula gesto do usuário
+      var ts = new TouchEvent('touchstart', {
+        bubbles:true, cancelable:true,
+        touches: [new Touch({identifier:1, target:el, clientX:cx, clientY:cy})]
+      });
+      var te = new TouchEvent('touchend', {
+        bubbles:true, cancelable:true, touches: [],
+        changedTouches: [new Touch({identifier:1, target:el, clientX:cx, clientY:cy})]
+      });
+      el.dispatchEvent(ts);
+      setTimeout(function(){ el.dispatchEvent(te); }, 80);
+    }
+  } catch(e) {}
+}
 
+// -------- Lista --------
 function toggleList() {
   listVisible = !listVisible;
   epList.classList.toggle('show', listVisible);
   if (listVisible) {
-    const active = document.getElementById('epitem-' + cur);
-    if (active) active.scrollIntoView({block:'center', behavior:'smooth'});
+    var a = document.getElementById('epitem-' + cur);
+    if (a) a.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    overlay.style.pointerEvents = 'none';
+  } else {
+    overlay.style.pointerEvents = 'auto';
   }
 }
 
-// Toques nas zonas laterais
-document.getElementById('tz-prev').addEventListener('click', prev);
-document.getElementById('tz-next').addEventListener('click', next);
+// -------- Swipe --------
+var swipeX = null;
+document.addEventListener('touchstart', function(e) {
+  swipeX = e.touches[0].clientX;
+}, { passive: true });
+document.addEventListener('touchend', function(e) {
+  if (swipeX === null) return;
+  var dx = e.changedTouches[0].clientX - swipeX;
+  swipeX = null;
+  if (listVisible) return;
+  if (Math.abs(dx) > 80) {
+    if (dx < 0) load(cur + 1);
+    else         load(cur - 1);
+  } else {
+    tocou();
+  }
+}, { passive: true });
 
-// Toque no centro = mostrar topbar
-frame.addEventListener('click', showTopbar);
-
-// Controle remoto / teclado
+// -------- Teclado / Controle remoto --------
 document.addEventListener('keydown', function(e) {
   if (listVisible) {
     if (e.keyCode === 27 || e.keyCode === 8) { e.preventDefault(); toggleList(); }
     return;
   }
   switch(e.keyCode) {
-    case 37: case 177: case 88: e.preventDefault(); prev(); break;   // ← / MediaPrev
-    case 39: case 176: case 87: e.preventDefault(); next(); break;   // → / MediaNext
-    case 38: case 40:           e.preventDefault(); showTopbar(); break; // ↑↓
-    case 13: case 32:           e.preventDefault(); showTopbar(); break; // Enter / Space
-    case 77: case 73:           e.preventDefault(); toggleList(); break; // M / I
+    case 37: case 177: e.preventDefault(); load(cur - 1); break; // ← / prev
+    case 39: case 176: e.preventDefault(); load(cur + 1); break; // → / next
+    case 13: case 32:  e.preventDefault(); tocou(); break;       // Enter / Space
+    case 77: case 73:  e.preventDefault(); toggleList(); break;  // M / I
+    case 38: case 40:  e.preventDefault(); tocou(); break;       // ↑↓
   }
 });
 
-// Swipe touch
-let sx = null;
-document.addEventListener('touchstart', e => { sx = e.touches[0].clientX; }, {passive:true});
-document.addEventListener('touchend', e => {
-  if (sx === null) return;
-  const dx = e.changedTouches[0].clientX - sx;
-  if (Math.abs(dx) > 70) { dx < 0 ? next() : prev(); }
-  else { showTopbar(); }
-  sx = null;
-}, {passive:true});
-
-// Iniciar
+// -------- Iniciar --------
 load(cur);
 </script>
 </body>
