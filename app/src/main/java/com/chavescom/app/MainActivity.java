@@ -3,24 +3,119 @@ package com.chavescom.app;
 import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
-import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+
 import java.io.IOException;
 import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.HashMap;
-import java.util.Map;
+import java.io.OutputStream;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private LocalServer localServer;
+    private static final int PORT = 8765;
+    private static final String TAG = "ChavesCom";
+
+    // Servidor HTTP local minimalista
+    static class LocalServer {
+        private final ServerSocket serverSocket;
+        private final ExecutorService pool = Executors.newCachedThreadPool();
+        private final android.content.res.AssetManager assets;
+        private volatile boolean running = true;
+
+        LocalServer(android.content.res.AssetManager assets) throws IOException {
+            this.assets = assets;
+            serverSocket = new ServerSocket(PORT);
+        }
+
+        void start() {
+            pool.execute(() -> {
+                while (running) {
+                    try {
+                        Socket client = serverSocket.accept();
+                        pool.execute(() -> handle(client));
+                    } catch (IOException ignored) {}
+                }
+            });
+        }
+
+        void stop() {
+            running = false;
+            try { serverSocket.close(); } catch (IOException ignored) {}
+            pool.shutdown();
+        }
+
+        private void handle(Socket client) {
+            try {
+                InputStream in = client.getInputStream();
+                OutputStream out = client.getOutputStream();
+
+                // Ler request line
+                StringBuilder sb = new StringBuilder();
+                int b;
+                while ((b = in.read()) != -1) {
+                    sb.append((char) b);
+                    if (sb.length() > 4 && sb.substring(sb.length()-4).equals("\r\n\r\n")) break;
+                    if (sb.length() > 8192) break;
+                }
+
+                String req = sb.toString();
+                String path = "/index.html";
+                if (req.startsWith("GET ")) {
+                    path = req.split(" ")[1];
+                    if (path.equals("/")) path = "/index.html";
+                }
+                // Remover query string
+                if (path.contains("?")) path = path.substring(0, path.indexOf("?"));
+
+                String assetPath = path.startsWith("/") ? path.substring(1) : path;
+                String mime = getMime(assetPath);
+
+                try {
+                    InputStream asset = assets.open(assetPath);
+                    byte[] data = asset.readAllBytes();
+                    asset.close();
+
+                    String header = "HTTP/1.1 200 OK\r\n" +
+                        "Content-Type: " + mime + "\r\n" +
+                        "Content-Length: " + data.length + "\r\n" +
+                        "Connection: close\r\n" +
+                        "Cache-Control: no-cache\r\n\r\n";
+                    out.write(header.getBytes(StandardCharsets.UTF_8));
+                    out.write(data);
+                } catch (IOException e) {
+                    String resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found";
+                    out.write(resp.getBytes(StandardCharsets.UTF_8));
+                }
+
+                out.flush();
+                client.close();
+            } catch (IOException e) {
+                Log.e(TAG, "handle error: " + e.getMessage());
+            }
+        }
+
+        private String getMime(String path) {
+            if (path.endsWith(".html")) return "text/html; charset=UTF-8";
+            if (path.endsWith(".js"))   return "application/javascript";
+            if (path.endsWith(".css"))  return "text/css";
+            if (path.endsWith(".png"))  return "image/png";
+            if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+            if (path.endsWith(".json")) return "application/json";
+            return "application/octet-stream";
+        }
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +138,15 @@ public class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
         getWindow().getDecorView().setSystemUiVisibility(uiFlags);
 
+        // Iniciar servidor local
+        try {
+            localServer = new LocalServer(getAssets());
+            localServer.start();
+            Log.d(TAG, "Servidor local iniciado na porta " + PORT);
+        } catch (IOException e) {
+            Log.e(TAG, "Erro ao iniciar servidor: " + e.getMessage());
+        }
+
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
         setContentView(webView);
@@ -62,7 +166,7 @@ public class MainActivity extends Activity {
         s.setBuiltInZoomControls(false);
         s.setDisplayZoomControls(false);
         s.setSupportZoom(false);
-        s.setCacheMode(WebSettings.LOAD_CACHE_ELSE_NETWORK);
+        s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setDefaultTextEncodingName("UTF-8");
 
         webView.setWebViewClient(new WebViewClient() {
@@ -70,67 +174,11 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 getWindow().getDecorView().setSystemUiVisibility(uiFlags);
             }
-
-            @Override
-            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                String url = request.getUrl().toString();
-
-                // Interceptar requisições ao Google Drive e remover o Referer file://
-                if (url.contains("drive.usercontent.google.com") || url.contains("drive.google.com")) {
-                    try {
-                        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
-                        conn.setConnectTimeout(15000);
-                        conn.setReadTimeout(30000);
-                        conn.setInstanceFollowRedirects(true);
-
-                        // Copiar headers EXCETO Referer (que causa bloqueio do Google)
-                        for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
-                            String key = entry.getKey();
-                            if (!key.equalsIgnoreCase("Referer")) {
-                                conn.setRequestProperty(key, entry.getValue());
-                            }
-                        }
-
-                        // Garantir User-Agent compatível
-                        conn.setRequestProperty("User-Agent",
-                            "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 Chrome/74.0.3729.157 Mobile Safari/537.36");
-
-                        int code = conn.getResponseCode();
-                        String mimeType = conn.getContentType();
-                        if (mimeType == null) mimeType = "application/octet-stream";
-                        if (mimeType.contains(";")) mimeType = mimeType.split(";")[0].trim();
-
-                        // Montar headers de resposta
-                        Map<String, String> responseHeaders = new HashMap<>();
-                        for (int i = 0; ; i++) {
-                            String key = conn.getHeaderFieldKey(i);
-                            String val = conn.getHeaderField(i);
-                            if (key == null && val == null) break;
-                            if (key != null) responseHeaders.put(key, val);
-                        }
-
-                        InputStream stream = (code >= 200 && code < 300)
-                            ? conn.getInputStream()
-                            : conn.getErrorStream();
-
-                        return new WebResourceResponse(
-                            mimeType,
-                            "UTF-8",
-                            code,
-                            code == 200 ? "OK" : "Error",
-                            responseHeaders,
-                            stream
-                        );
-                    } catch (IOException e) {
-                        return null; // deixa a WebView tentar normalmente
-                    }
-                }
-                return null; // não interceptar outras URLs
-            }
         });
-
         webView.setWebChromeClient(new WebChromeClient());
-        webView.loadUrl("file:///android_asset/index.html");
+
+        // Carregar via localhost em vez de file://
+        webView.loadUrl("http://localhost:" + PORT + "/index.html");
     }
 
     @Override
@@ -166,5 +214,12 @@ public class MainActivity extends Activity {
         super.onPause();
         webView.onPause();
         webView.pauseTimers();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (localServer != null) localServer.stop();
+        if (webView != null) webView.destroy();
     }
 }
