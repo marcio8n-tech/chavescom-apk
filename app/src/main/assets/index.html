@@ -5,135 +5,45 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Chaves.com</title>
   <style>
-    html, body {
-      margin: 0; padding: 0;
-      width: 100%; height: 100%;
-      overflow: hidden;
-      background: #000;
-      font-family: sans-serif;
-    }
-    #player {
-      position: fixed; top: 0; left: 0;
-      width: 100vw; height: 100vh;
-      overflow: hidden; background: #000;
-    }
-    #frame {
-      display: block; position: absolute;
-      top: 0; left: 0; width: 100%; height: 100%;
-      border: 0; background: #000;
-    }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#000; font-family:sans-serif; }
+    #player { position:fixed; top:0; left:0; width:100vw; height:100vh; overflow:hidden; background:#000; }
+    #frame { display:block; position:absolute; top:0; left:0; width:100%; height:100%; border:0; background:#000; }
 
-    /* ===== ZONAS DE TOQUE NAS LATERAIS ===== */
-    .zone {
-      position: absolute; top: 0; height: 100%;
-      width: 22%;          /* 22% da largura em cada lado */
-      z-index: 25;
-      background: transparent;
-      -webkit-tap-highlight-color: transparent;
-      cursor: pointer;
-    }
-    #zone-left  { left: 0; }
-    #zone-right { right: 0; }
+    /* Zonas laterais */
+    .zone { position:absolute; top:0; height:100%; width:22%; z-index:25; background:transparent; -webkit-tap-highlight-color:transparent; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+    #zone-left  { left:0; }
+    #zone-right { right:0; }
+    .zone-icon { font-size:36px; color:rgba(255,255,255,0); transition:color 0.15s; pointer-events:none; text-shadow:0 0 12px rgba(0,0,0,0.8); }
+    .zone.active .zone-icon { color:rgba(255,255,255,0.85); }
 
-    /* Flash visual ao tocar */
-    .zone-flash {
-      position: absolute; top: 50%; transform: translateY(-50%);
-      font-size: 32px; opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.15s;
-    }
-    #zone-left  .zone-flash { left:  10px; }
-    #zone-right .zone-flash { right: 10px; }
-    .zone.active .zone-flash { opacity: 1; }
-
-    /* ===== TOPBAR ===== */
-    #topbar {
-      position: absolute; top: 0; left: 0; right: 0;
-      z-index: 30;
-      background: linear-gradient(to bottom, rgba(0,0,0,0.88), transparent);
-      padding: 10px 14px 30px;
-      display: flex; align-items: center; gap: 8px;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.5s ease;
-    }
-    #topbar.visivel { opacity: 1; pointer-events: auto; }
-    #ep-title {
-      flex: 1; color: #fff; font-size: 15px; font-weight: 700;
-      text-shadow: 0 1px 4px #000;
-      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    }
-    #ep-counter { color: rgba(255,255,255,0.6); font-size: 13px; white-space: nowrap; }
-    #btn-list {
-      background: rgba(255,255,255,0.15); border: none; color: #fff;
-      border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer;
-    }
-
-    /* Feedback central nav */
-    #nav-feedback {
-      position: absolute; top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      z-index: 35;
-      background: rgba(0,0,0,0.7);
-      color: #fff; font-size: 28px; font-weight: 700;
-      border-radius: 50%; width: 70px; height: 70px;
-      display: flex; align-items: center; justify-content: center;
-      opacity: 0; pointer-events: none;
-      transition: opacity 0.25s;
-    }
-    #nav-feedback.show { opacity: 1; }
+    /* Topbar */
+    #topbar { position:absolute; top:0; left:0; right:0; z-index:30; background:linear-gradient(to bottom,rgba(0,0,0,0.88),transparent); padding:10px 14px 30px; display:flex; align-items:center; gap:8px; opacity:0; pointer-events:none; transition:opacity 0.5s ease; }
+    #topbar.visivel { opacity:1; pointer-events:auto; }
+    #ep-title { flex:1; color:#fff; font-size:15px; font-weight:700; text-shadow:0 1px 4px #000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    #ep-counter { color:rgba(255,255,255,0.6); font-size:13px; white-space:nowrap; }
+    #btn-list { background:rgba(255,255,255,0.15); border:none; color:#fff; border-radius:6px; padding:4px 10px; font-size:13px; cursor:pointer; }
 
     /* Loading */
-    #loading {
-      position: absolute; inset: 0; z-index: 40;
-      background: #000;
-      display: flex; flex-direction: column;
-      align-items: center; justify-content: center;
-      gap: 14px; color: #fff; font-size: 15px;
-      transition: opacity 0.5s;
-    }
-    #loading.oculto { opacity: 0; pointer-events: none; }
-    .spinner {
-      width: 40px; height: 40px;
-      border: 4px solid rgba(255,255,255,0.12);
-      border-top-color: #e55000;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
+    #loading { position:absolute; inset:0; z-index:40; background:#000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px; color:#fff; font-size:15px; transition:opacity 0.4s; }
+    #loading.oculto { opacity:0; pointer-events:none; }
+    .spinner { width:40px; height:40px; border:4px solid rgba(255,255,255,0.12); border-top-color:#e55000; border-radius:50%; animation:spin 0.8s linear infinite; }
+    @keyframes spin { to { transform:rotate(360deg); } }
 
-    /* Overlay central (só a faixa do meio — entre as zonas) */
-    #overlay-center {
-      position: absolute;
-      top: 0; left: 22%; right: 22%; height: 100%;
-      z-index: 20; background: transparent;
-    }
+    /* Centro */
+    #overlay-center { position:absolute; top:0; left:22%; right:22%; height:100%; z-index:20; background:transparent; }
 
     /* Lista */
-    #ep-list {
-      display: none; position: absolute; inset: 0; z-index: 50;
-      background: rgba(0,0,0,0.96);
-      overflow-y: auto; padding: 14px;
-      -webkit-overflow-scrolling: touch;
-    }
-    #ep-list.show { display: block; }
-    #ep-list h2 { color: #fff; margin-bottom: 12px; font-size: 17px; }
-    .ep-item {
-      padding: 10px 13px; margin-bottom: 5px;
-      background: rgba(255,255,255,0.07);
-      border-radius: 7px; color: #fff; font-size: 14px; cursor: pointer;
-      display: flex; align-items: center; gap: 9px;
-      border: 2px solid transparent;
-    }
-    .ep-item.active { background: rgba(229,80,0,0.5); border-color: #e55000; }
-    .ep-num { color: rgba(255,255,255,0.35); font-size: 12px; min-width: 26px; }
+    #ep-list { display:none; position:absolute; inset:0; z-index:50; background:rgba(0,0,0,0.96); overflow-y:auto; padding:14px; -webkit-overflow-scrolling:touch; }
+    #ep-list.show { display:block; }
+    #ep-list h2 { color:#fff; margin-bottom:12px; font-size:17px; }
+    .ep-item { padding:10px 13px; margin-bottom:5px; background:rgba(255,255,255,0.07); border-radius:7px; color:#fff; font-size:14px; cursor:pointer; display:flex; align-items:center; gap:9px; border:2px solid transparent; }
+    .ep-item.active { background:rgba(229,80,0,0.5); border-color:#e55000; }
+    .ep-num { color:rgba(255,255,255,0.35); font-size:12px; min-width:26px; }
   </style>
 </head>
 <body>
 <div id="player">
-  <div id="loading">
-    <div class="spinner"></div>
-    <span id="loading-txt">Carregando...</span>
-  </div>
+  <div id="loading"><div class="spinner"></div><span id="loading-txt">Carregando...</span></div>
 
   <iframe id="frame"
     allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
@@ -141,14 +51,9 @@
     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
   ></iframe>
 
-  <!-- Zonas de toque laterais — FICAM NA FRENTE do iframe -->
-  <div id="zone-left"  class="zone"><span class="zone-flash">◀◀</span></div>
-  <div id="zone-right" class="zone"><span class="zone-flash">▶▶</span></div>
-
-  <!-- Overlay central para mostrar topbar -->
+  <div id="zone-left"  class="zone"><span class="zone-icon">◀</span></div>
+  <div id="zone-right" class="zone"><span class="zone-icon">▶</span></div>
   <div id="overlay-center"></div>
-
-  <div id="nav-feedback"></div>
 
   <div id="topbar">
     <span id="ep-title">Chaves.com</span>
@@ -325,13 +230,10 @@ var epItems       = document.getElementById('ep-items');
 var zoneLeft      = document.getElementById('zone-left');
 var zoneRight     = document.getElementById('zone-right');
 var overlayCenter = document.getElementById('overlay-center');
-var navFeedback   = document.getElementById('nav-feedback');
 
-var topbarTimer   = null;
-var feedbackTimer = null;
-var listVisible   = false;
-var autoplayDone  = false;
-var isLoading     = false;
+var topbarTimer  = null;
+var listVisible  = false;
+var loadTimer    = null;
 
 // ---- Lista ----
 EPS.forEach(function(ep, i) {
@@ -347,34 +249,25 @@ EPS.forEach(function(ep, i) {
 function mostrarTopbar() {
   topbar.classList.add('visivel');
   clearTimeout(topbarTimer);
-  topbarTimer = setTimeout(function() {
-    topbar.classList.remove('visivel');
-  }, 4000);
+  topbarTimer = setTimeout(function() { topbar.classList.remove('visivel'); }, 4000);
 }
 
-// ---- Feedback central ----
-function showFeedback(symbol) {
-  navFeedback.textContent = symbol;
-  navFeedback.classList.add('show');
-  clearTimeout(feedbackTimer);
-  feedbackTimer = setTimeout(function() {
-    navFeedback.classList.remove('show');
-  }, 700);
+// ---- Flash nas zonas ----
+function flashZone(zone) {
+  zone.classList.add('active');
+  setTimeout(function() { zone.classList.remove('active'); }, 350);
 }
 
-// ---- Carregar ----
+// ---- Carregar episódio ----
 function driveUrl(id) {
   return 'https://drive.google.com/file/d/' + id + '/preview?rm=minimal';
 }
 
 function load(idx) {
-  if (isLoading) return;
   if (idx < 0) idx = EPS.length - 1;
   if (idx >= EPS.length) idx = 0;
   cur = idx;
   localStorage.setItem(KEY, String(cur));
-  autoplayDone = false;
-  isLoading = true;
 
   var ep = EPS[cur];
   titleEl.textContent   = ep.title;
@@ -384,80 +277,53 @@ function load(idx) {
   var a = document.getElementById('epitem-' + cur);
   if (a) a.classList.add('active');
 
+  // Mostrar loading imediatamente
   loading.classList.remove('oculto');
   loadTxt.textContent = ep.title;
 
-  frame.src = '';
-  setTimeout(function() { frame.src = driveUrl(ep.driveId); }, 100);
+  // Cancelar qualquer timer anterior
+  clearTimeout(loadTimer);
+
+  // Trocar iframe SEM delay — resposta imediata
+  frame.src = driveUrl(ep.driveId);
+
   mostrarTopbar();
 }
 
-// ---- Autoplay ----
-function simulateClick(x, y) {
-  var el = document.elementFromPoint(x, y) || document.body;
-  var evt = document.createEvent('MouseEvents');
-  evt.initMouseEvent('click', true, true, window, 1,
-    x, y, x, y, false, false, false, false, 0, null);
-  el.dispatchEvent(evt);
-}
-
-function tryAutoplay() {
-  if (autoplayDone) return;
-  autoplayDone = true;
-  var rect = frame.getBoundingClientRect();
-  simulateClick(Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2));
-}
-
+// ---- Esconder loading quando iframe carrega ----
 frame.addEventListener('load', function() {
-  setTimeout(function() {
+  // Esconder loading após 800ms (Drive precisa de um instante pra renderizar)
+  loadTimer = setTimeout(function() {
     loading.classList.add('oculto');
-    isLoading = false;
-    tryAutoplay();
-  }, 1800);
-  mostrarTopbar();
+    // Notificar o Java para fazer o autoplay via evaluateJavascript
+    // O Android lê isso via WebViewClient.onPageFinished do iframe
+    // Usamos window.Android.autoplay() se disponível
+    if (window.Android && window.Android.autoplay) {
+      window.Android.autoplay();
+    }
+  }, 800);
 });
 
-// ---- ZONAS LATERAIS — toque simples passa episódio ----
-function flashZone(zone) {
-  zone.classList.add('active');
-  setTimeout(function() { zone.classList.remove('active'); }, 350);
+// ---- Zonas laterais ----
+function navAnterior(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  flashZone(zoneLeft);
+  load(cur - 1);
+}
+function navProximo(e) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  flashZone(zoneRight);
+  load(cur + 1);
 }
 
-zoneLeft.addEventListener('click', function(e) {
-  e.stopPropagation();
-  flashZone(zoneLeft);
-  showFeedback('◀◀');
-  load(cur - 1);
-});
-
-zoneRight.addEventListener('click', function(e) {
-  e.stopPropagation();
-  flashZone(zoneRight);
-  showFeedback('▶▶');
-  load(cur + 1);
-});
-
-// Touch direto nas zonas (para TV com touch)
-zoneLeft.addEventListener('touchend', function(e) {
-  e.preventDefault(); e.stopPropagation();
-  flashZone(zoneLeft);
-  showFeedback('◀◀');
-  load(cur - 1);
-}, {passive: false});
-
-zoneRight.addEventListener('touchend', function(e) {
-  e.preventDefault(); e.stopPropagation();
-  flashZone(zoneRight);
-  showFeedback('▶▶');
-  load(cur + 1);
-}, {passive: false});
+zoneLeft.addEventListener('click',    navAnterior);
+zoneRight.addEventListener('click',   navProximo);
+zoneLeft.addEventListener('touchend',  function(e) { e.preventDefault(); navAnterior(); }, {passive:false});
+zoneRight.addEventListener('touchend', function(e) { e.preventDefault(); navProximo();  }, {passive:false});
 
 // ---- Centro mostra topbar ----
-overlayCenter.addEventListener('click', function() { mostrarTopbar(); });
-overlayCenter.addEventListener('touchend', function(e) {
-  e.preventDefault();
-  mostrarTopbar();
-}, {passive: false});
+overlayCenter.addEventListener('click',    function() { mostrarTopbar(); });
+overlayCenter.addEventListener('touchend', function(e) { e.preventDefault(); mostrarTopbar(); }, {passive:false});
 
 // ---- Lista ----
 function toggleList() {
@@ -465,35 +331,24 @@ function toggleList() {
   epList.classList.toggle('show', listVisible);
   if (listVisible) {
     var a = document.getElementById('epitem-' + cur);
-    if (a) a.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    if (a) a.scrollIntoView({ block:'center', behavior:'smooth' });
   }
 }
 
-// ---- Controle remoto (todos os keyCodes de TV Android) ----
+// ---- Controle remoto ----
 document.addEventListener('keydown', function(e) {
   var k = e.keyCode;
   if (listVisible) {
     if (k===4||k===8||k===27||k===82) { e.preventDefault(); toggleList(); }
     return;
   }
-  // Próximo: DPAD_RIGHT(22), →(39), MEDIA_NEXT(87), FF(90), 176
-  if (k===22||k===39||k===87||k===90||k===176) {
-    e.preventDefault(); showFeedback('▶▶'); load(cur+1); return;
-  }
-  // Anterior: DPAD_LEFT(21), ←(37), MEDIA_PREV(88), RW(89), 177
-  if (k===21||k===37||k===88||k===89||k===177) {
-    e.preventDefault(); showFeedback('◀◀'); load(cur-1); return;
-  }
-  // Mostrar barra: DPAD_CENTER(23), Enter(13/66), cima/baixo(19/20/38/40), espaço(32)
-  if (k===23||k===13||k===66||k===32||k===19||k===20||k===38||k===40) {
-    e.preventDefault(); mostrarTopbar(); return;
-  }
-  // Lista: MENU(82), M(77), I(73)
+  if (k===22||k===39||k===87||k===90||k===176) { e.preventDefault(); flashZone(zoneRight); load(cur+1); return; }
+  if (k===21||k===37||k===88||k===89||k===177) { e.preventDefault(); flashZone(zoneLeft);  load(cur-1); return; }
+  if (k===23||k===13||k===66||k===32||k===19||k===20||k===38||k===40) { e.preventDefault(); mostrarTopbar(); return; }
   if (k===82||k===77||k===73) { e.preventDefault(); toggleList(); return; }
-  // Voltar
-  if (k===4||k===8||k===27) { e.preventDefault(); return; }
 }, true);
 
+// ---- Iniciar ----
 load(cur);
 </script>
 </body>
