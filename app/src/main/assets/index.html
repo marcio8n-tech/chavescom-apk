@@ -2,168 +2,181 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Chaves.com</title>
   <style>
-    * { margin:0; padding:0; box-sizing:border-box; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
     html, body {
-      width:100%; height:100%;
-      background:#000;
-      overflow:hidden;
+      width: 100%; height: 100%;
+      background: #000;
+      overflow: hidden;
     }
-    /* iframe simples, sem transform, sem translateZ, sem overflow:hidden no container */
-    #vframe {
-      position:fixed;
-      top:0; left:0;
-      width:100%; height:100%;
-      border:none;
-      background:#000;
+    #player {
+      position: fixed; inset: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
-    /* Barras pretas POR CIMA do iframe para cobrir controles do Drive */
-    #bar-top {
-      position:fixed;
-      top:0; left:0; right:0;
-      height:38px;
-      background:#000;
-      z-index:100;
+    #vid {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      background: #000;
+      display: block;
     }
-    #bar-bottom {
-      position:fixed;
-      bottom:0; left:0; right:0;
-      height:38px;
-      background:#000;
-      z-index:100;
+    /* Zonas de toque laterais para troca de episódio */
+    .tz {
+      position: absolute; top: 0; height: 100%; width: 20%;
+      z-index: 20; background: transparent;
+      border: none; cursor: pointer;
+      -webkit-tap-highlight-color: transparent;
+      outline: none;
     }
-    /* Zonas de toque transparentes para trocar episódio */
-    #btn-prev, #btn-next {
-      position:fixed;
-      top:0; height:100%; width:20%;
-      background:transparent;
-      border:none;
-      z-index:200;
-      cursor:pointer;
+    #tz-prev { left: 0; }
+    #tz-next { right: 0; }
+
+    /* OSD - número do episódio */
+    #osd {
+      position: absolute; top: 16px; right: 20px;
+      color: rgba(255,255,255,0.7);
+      font-family: sans-serif; font-size: 18px;
+      z-index: 30;
+      text-shadow: 0 1px 4px #000;
+      pointer-events: none;
+      transition: opacity 0.5s;
     }
-    #btn-prev { left:0; }
-    #btn-next { right:0; }
+    #osd.hidden { opacity: 0; }
+
+    /* Tela de erro */
+    #err {
+      display: none;
+      position: absolute; inset: 0;
+      align-items: center; justify-content: center;
+      flex-direction: column; gap: 16px;
+      background: #000; color: #fff;
+      font-family: sans-serif; font-size: 20px;
+      z-index: 50; text-align: center; padding: 24px;
+    }
+    #err.show { display: flex; }
+    #err button {
+      margin-top: 8px; padding: 12px 32px;
+      font-size: 18px; border-radius: 8px;
+      background: #e50; color: #fff; border: none; cursor: pointer;
+    }
   </style>
 </head>
 <body>
-  <iframe id="vframe"
-    allow="autoplay; encrypted-media; fullscreen"
-    allowfullscreen>
-  </iframe>
-  <div id="bar-top"></div>
-  <div id="bar-bottom"></div>
-  <button id="btn-prev"></button>
-  <button id="btn-next"></button>
+<div id="player">
+  <video id="vid"
+    autoplay
+    playsinline
+    webkit-playsinline
+    x5-playsinline
+    x5-video-player-type="h5"
+    x5-video-player-fullscreen="true"
+    preload="auto"
+    controls>
+  </video>
+  <div id="osd">Ep 1</div>
+  <button class="tz" id="tz-prev"></button>
+  <button class="tz" id="tz-next"></button>
+  <div id="err">
+    <span id="err-msg">Não foi possível carregar o vídeo.</span>
+    <button onclick="retryLoad()">Tentar novamente</button>
+    <button onclick="next()">Próximo episódio</button>
+  </div>
+</div>
 
 <script>
-const EPS=[
-  '0B_p8pzPcYi4qRXRLYXRYQWxuWVk','0B_p8pzPcYi4qZlNpNlRERkFzNTQ',
-  '0B_p8pzPcYi4qb2JUWHI0dzl2d1E','0B_p8pzPcYi4qY0dFcFRWZjBqS3M',
-  '0B_p8pzPcYi4qd2JyWGdIZ1NaeWM','0B_p8pzPcYi4qeENGNTlvcjVocTA',
-  '0B_p8pzPcYi4qazBfSUZqMkVMQmM','0B_p8pzPcYi4qdjNUQS1YWGVSZjA',
-  '0B_p8pzPcYi4qdHNzdGVPNjd0V0E','0B_p8pzPcYi4qTXVOcWRFeC1ycFk',
-  '0B_p8pzPcYi4qcnJUSUkzc1BTaUU','0B_p8pzPcYi4qZGRMZTZ0X09wTzg',
-  '0B_p8pzPcYi4qMGhZU2VGRFVYYmc','0B_p8pzPcYi4qSmF4WTNTdWRCNXc',
-  '0B_p8pzPcYi4qSW1fLXRsTDhRS1E','0B_p8pzPcYi4qekpkekxyVEFYZFE',
-  '0B_p8pzPcYi4qMGpqcDJZLVp2MkE','0B_p8pzPcYi4qSGZLcUxTYkxmcnM',
-  '0B_p8pzPcYi4qUmRieVN4MlBzcnM','0B_p8pzPcYi4qa0Jua1g0T2w2dnc',
-  '0B_p8pzPcYi4qa1dPd0lxZWtRak0','0B_p8pzPcYi4qMk1MNy03empxRVU',
-  '0B_p8pzPcYi4qUzJyeFRrVW5qSUk','0B_p8pzPcYi4qdGUyVXJiNVlXdG8',
-  '0B_p8pzPcYi4qc3hHSFh4X1hBc1U','0B_p8pzPcYi4qV25iZTZoS3BWU0U',
-  '0B_p8pzPcYi4qclJGZ012QmxBaEU','0B_p8pzPcYi4qNGdGaVpqRFNJWGs',
-  '0B_p8pzPcYi4qMzNLby03MUVWR1U','0B_p8pzPcYi4qWk9hNWxGT2w0bk0',
-  '0B_p8pzPcYi4qeXlGQ3ZqX3pVMzQ','0B_p8pzPcYi4qU3VsT0FEZEk2NkU',
-  '0B_p8pzPcYi4qT3NvbFBMWDZuQXM','0B_p8pzPcYi4qV21nWEZEXzVoV0E',
-  '0B_p8pzPcYi4qU0l3OXgwTUhET3M','0B_p8pzPcYi4qdXB4TGNOWDY1Q3M',
-  '0B_p8pzPcYi4qVEZERTRmNEdxREk','0B_p8pzPcYi4qUVdndGZhNVlZT2s',
-  '0B_p8pzPcYi4qNVZZWG1CaEVxalU','0B_p8pzPcYi4qbndPYTZmS1JGUUU',
-  '0B_p8pzPcYi4qWGlkMUNBamVCbVk','0B_p8pzPcYi4qX0EtZVhSczQwb0k',
-  '0B_p8pzPcYi4qaGJFSXRPUGhVc3M','0B_p8pzPcYi4qSjYyM2h1bC1kUUU',
-  '0B_p8pzPcYi4qNFZzcGFDSXdoV0U','0B_p8pzPcYi4qb1k4ZjNvWkZmOVU',
-  '0B_p8pzPcYi4qaEZQcVpFc2Nac2M','0B_p8pzPcYi4qQ21JOE9zeTVrZWs',
-  '0B_p8pzPcYi4qWEYtOGpWNEhXUm8','0B_p8pzPcYi4qZEI1NTlUWlVhNms',
-  '0B_p8pzPcYi4qWjVTMjlhekZMb0U','0B_p8pzPcYi4qMm1PUmpXRkQxUFU',
-  '0B_p8pzPcYi4qWnlGaW5IdFFibVE','0B_p8pzPcYi4qT2lyNkp0dHpOeUE',
-  '0B_p8pzPcYi4qUDRUeG9MNGFzUFk','0B_p8pzPcYi4qeWtMYVhCS1ROOUE',
-  '0B_p8pzPcYi4qZzFodWJiZUhTQlE','0B_p8pzPcYi4qWm9xcExoWlkyWFE',
-  '0B_p8pzPcYi4qbEk4R0VoZFhsNXM','0B_p8pzPcYi4qcFBVUkR1YjJ5T3c',
-  '0B_p8pzPcYi4qeXZXZk1VcG9ZeVk','0B_p8pzPcYi4qbUFSbVNqQm12bjQ',
-  '0B_p8pzPcYi4qYUZ1aHpKNE1sV28','0B_p8pzPcYi4qdXlzQkF6cUZqMFk',
-  '0B_p8pzPcYi4qMFE0dUl3WGJxZk0','0B_p8pzPcYi4qZXA2dElPQlZWVkk',
-  '0B_p8pzPcYi4qNHFIV1ZfaE9TQXM','0B_p8pzPcYi4qX0tYa0E3Rm41YVk',
-  '0B_p8pzPcYi4qSmM4eUZFNE4wZkk','0B_p8pzPcYi4qWUZBNk1FUnpjams',
-  '0B_p8pzPcYi4qNzZSZGFxMkZaUjA','0B_p8pzPcYi4qTHZpNXA3NjRhbWs',
-  '0B_p8pzPcYi4qcE82ckpoUzdCU2s','0B_p8pzPcYi4qZXpuWVR6MnN3bk0',
-  '0B_p8pzPcYi4qSHF4dGJEVFRrYkU','0B_p8pzPcYi4qVXJSbEloWlloYm8',
-  '0B_p8pzPcYi4qMFFHTzhWVW9pUXc','0B_p8pzPcYi4qSU45VnZSbW1Ia1E',
-  '0B_p8pzPcYi4qcFVlbzgzUlFSeXM','0B_p8pzPcYi4qOWdYbXU3UEJpM28',
-  '0B_p8pzPcYi4qWmFwb3poU3BKMFE','0B_p8pzPcYi4qb1JSdXBscGFHTEE',
-  '0B_p8pzPcYi4qVWQ0dGNzMXZkT0U','0B_p8pzPcYi4qdEYtdUxRWjJEWkE',
-  '0B_p8pzPcYi4qSm5GNjNhVHBNNVE','0B_p8pzPcYi4qNHVZSjhXRFpzTkU',
-  '0B_p8pzPcYi4qbEloTjF3dER0Ync','0B_p8pzPcYi4qUHZ5VmhRTldSbjQ',
-  '0B_p8pzPcYi4qZm9fcElYc0NJVnM','0B_p8pzPcYi4qSFlFa1dqcjg2MnM',
-  '0B_p8pzPcYi4qUEdUNW50c3RxUkk','0B_p8pzPcYi4qWEZhb3pVajhvYkk',
-  '0B_p8pzPcYi4qdE45TE1pQWdxZlE','0B_p8pzPcYi4qSWI3dE4ybzVRYzA',
-  '0B_p8pzPcYi4qOXVKYVZTOFhBY2M','0B_p8pzPcYi4qWVdoMlp1bGxiVms',
-  '0B_p8pzPcYi4qeHR5ckk1cGFYVk0','0B_p8pzPcYi4qcHVNcVJhdDR5dVE',
-  '0B_p8pzPcYi4qd3Y2N3dhWm1CcVE','0B_p8pzPcYi4qREd1NmVXNlBuYzg',
-  '0B_p8pzPcYi4qTE9iQW5xRXFScms','0B_p8pzPcYi4qYVFfSFh2NEpnbjA',
-  '0B_p8pzPcYi4qM1ZfbmtUd0dBaVE','0B_p8pzPcYi4qQ0hBM2ZFcW9zYXc',
-  '0B_p8pzPcYi4qZk9oSHpocE9EeUU','0B_p8pzPcYi4qUmk0SnIwb0ZhbkE',
-  '0B_p8pzPcYi4qUEpfZkJCS0hMRnM','0B_p8pzPcYi4qY1ZadHJKejVsaGc',
-  '0B_p8pzPcYi4qNE1mdEdpWlVhQVU','0B_p8pzPcYi4qcUJLT3BZNlBKZlU',
-  '0B_p8pzPcYi4qbzFKNEZHZzlIbHM','0B_p8pzPcYi4qX0xpWEYzOWNUaXM',
-  '0B_p8pzPcYi4qUThqeHVYYVZoakE','0B_p8pzPcYi4qZjlHWW84Wm9sUEE',
-  '0B_p8pzPcYi4qeXBSZVZub2hVUFU','0B_p8pzPcYi4qOHFtSGFXT3VWYzQ',
-  '0B_p8pzPcYi4qRnV5c3d3ZnJBcFU','0B_p8pzPcYi4qdVRGMlp2ZFpBUXM',
-  '0B_p8pzPcYi4qUlFUckU1TmtNQ2s','0B_p8pzPcYi4qZE9PZXR6NlQ2aWs',
-  '0B_p8pzPcYi4qWjNOaFZud0lBUXM','0B_p8pzPcYi4qaWJPbWJYQlBhUHc',
-  '0B_p8pzPcYi4qZXJvNUlUMFVKWms','0B_p8pzPcYi4qbnpTMDFadExuSnM',
-  '0B_p8pzPcYi4qakE3ZU10Q2RKZVk','0B_p8pzPcYi4qSUtjX3AzWXBaems',
-  '0B_p8pzPcYi4qd1dKRlBEdWJmZEU','0B_p8pzPcYi4qcVZhcVl6Ym9Hbms',
-  '0B_p8pzPcYi4qdGxQRjVldzFUNFU','0B_p8pzPcYi4qYWdBRllPWjYzUmc',
-  '0B_p8pzPcYi4qOFZLY2l1elZuNHM','0B_p8pzPcYi4qQ1VBaURqZXdHTG8',
-  '0B_p8pzPcYi4qbEltbUhHZW5lMXM','0B_p8pzPcYi4qUXFxb2FDd0ZsWHM',
-  '0B_p8pzPcYi4qdnozaVlGUl9HYWs','0B_p8pzPcYi4qME80cnY1d1p6NkE',
-  '0B_p8pzPcYi4qeEF3RFhPVzhaUkE','0B_p8pzPcYi4qUGlUSldyOVdoQlk',
-  '0B_p8pzPcYi4qeHR3VlliaHlTVWs','0B_p8pzPcYi4qcWMzYWlVMExUa2M',
-  '0B_p8pzPcYi4qZjhOdGJiR3ZnYWs','0B_p8pzPcYi4qVzJvOWdScVBuMVU',
-  '0B_p8pzPcYi4qUm10WFMwNHVzems','0B_p8pzPcYi4qbFZLcGNXTzlabzg',
-];
+const EPS=['0B_p8pzPcYi4qRXRLYXRYQWxuWVk', '0B_p8pzPcYi4qZlNpNlRERkFzNTQ', '0B_p8pzPcYi4qb2JUWHI0dzl2d1E', '0B_p8pzPcYi4qY0dFcFRWZjBqS3M', '0B_p8pzPcYi4qd2JyWGdIZ1NaeWM', '0B_p8pzPcYi4qeENGNTlvcjVocTA', '0B_p8pzPcYi4qazBfSUZqMkVMQmM', '0B_p8pzPcYi4qdjNUQS1YWGVSZjA', '0B_p8pzPcYi4qdHNzdGVPNjd0V0E', '0B_p8pzPcYi4qTXVOcWRFeC1ycFk', '0B_p8pzPcYi4qcnJUSUkzc1BTaUU', '0B_p8pzPcYi4qZGRMZTZ0X09wTzg', '0B_p8pzPcYi4qMGhZU2VGRFVYYmc', '0B_p8pzPcYi4qSmF4WTNTdWRCNXc', '0B_p8pzPcYi4qSW1fLXRsTDhRS1E', '0B_p8pzPcYi4qekpkekxyVEFYZFE', '0B_p8pzPcYi4qMGpqcDJZLVp2MkE', '0B_p8pzPcYi4qSGZLcUxTYkxmcnM', '0B_p8pzPcYi4qUmRieVN4MlBzcnM', '0B_p8pzPcYi4qa0Jua1g0T2w2dnc', '0B_p8pzPcYi4qa1dPd0lxZWtRak0', '0B_p8pzPcYi4qMk1MNy03empxRVU', '0B_p8pzPcYi4qUzJyeFRrVW5qSUk', '0B_p8pzPcYi4qdGUyVXJiNVlXdG8', '0B_p8pzPcYi4qc3hHSFh4X1hBc1U', '0B_p8pzPcYi4qV25iZTZoS3BWU0U', '0B_p8pzPcYi4qclJGZ012QmxBaEU', '0B_p8pzPcYi4qNGdGaVpqRFNJWGs', '0B_p8pzPcYi4qMzNLby03MUVWR1U', '0B_p8pzPcYi4qWk9hNWxGT2w0bk0', '0B_p8pzPcYi4qeXlGQ3ZqX3pVMzQ', '0B_p8pzPcYi4qU3VsT0FEZEk2NkU', '0B_p8pzPcYi4qT3NvbFBMWDZuQXM', '0B_p8pzPcYi4qV21nWEZEXzVoV0E', '0B_p8pzPcYi4qU0l3OXgwTUhET3M', '0B_p8pzPcYi4qdXB4TGNOWDY1Q3M', '0B_p8pzPcYi4qVEZERTRmNEdxREk', '0B_p8pzPcYi4qUVdndGZhNVlZT2s', '0B_p8pzPcYi4qNVZZWG1CaEVxalU', '0B_p8pzPcYi4qbndPYTZmS1JGUUU', '0B_p8pzPcYi4qWGlkMUNBamVCbVk', '0B_p8pzPcYi4qX0EtZVhSczQwb0k', '0B_p8pzPcYi4qaGJFSXRPUGhVc3M', '0B_p8pzPcYi4qSjYyM2h1bC1kUUU', '0B_p8pzPcYi4qNFZzcGFDSXdoV0U', '0B_p8pzPcYi4qb1k4ZjNvWkZmOVU', '0B_p8pzPcYi4qaEZQcVpFc2Nac2M', '0B_p8pzPcYi4qQ21JOE9zeTVrZWs', '0B_p8pzPcYi4qWEYtOGpWNEhXUm8', '0B_p8pzPcYi4qZEI1NTlUWlVhNms', '0B_p8pzPcYi4qWjVTMjlhekZMb0U', '0B_p8pzPcYi4qMm1PUmpXRkQxUFU', '0B_p8pzPcYi4qWnlGaW5IdFFibVE', '0B_p8pzPcYi4qT2lyNkp0dHpOeUE', '0B_p8pzPcYi4qUDRUeG9MNGFzUFk', '0B_p8pzPcYi4qeWtMYVhCS1ROOUE', '0B_p8pzPcYi4qZzFodWJiZUhTQlE', '0B_p8pzPcYi4qWm9xcExoWlkyWFE', '0B_p8pzPcYi4qbEk4R0VoZFhsNXM', '0B_p8pzPcYi4qcFBVUkR1YjJ5T3c', '0B_p8pzPcYi4qeXZXZk1VcG9ZeVk', '0B_p8pzPcYi4qbUFSbVNqQm12bjQ', '0B_p8pzPcYi4qYUZ1aHpKNE1sV28', '0B_p8pzPcYi4qdXlzQkF6cUZqMFk', '0B_p8pzPcYi4qMFE0dUl3WGJxZk0', '0B_p8pzPcYi4qZXA2dElPQlZWVkk', '0B_p8pzPcYi4qNHFIV1ZfaE9TQXM', '0B_p8pzPcYi4qX0tYa0E3Rm41YVk', '0B_p8pzPcYi4qSmM4eUZFNE4wZkk', '0B_p8pzPcYi4qWUZBNk1FUnpjams', '0B_p8pzPcYi4qNzZSZGFxMkZaUjA', '0B_p8pzPcYi4qTHZpNXA3NjRhbWs', '0B_p8pzPcYi4qcE82ckpoUzdCU2s', '0B_p8pzPcYi4qZXpuWVR6MnN3bk0', '0B_p8pzPcYi4qSHF4dGJEVFRrYkU', '0B_p8pzPcYi4qVXJSbEloWlloYm8', '0B_p8pzPcYi4qMFFHTzhWVW9pUXc', '0B_p8pzPcYi4qSU45VnZSbW1Ia1E', '0B_p8pzPcYi4qcFVlbzgzUlFSeXM', '0B_p8pzPcYi4qOWdYbXU3UEJpM28', '0B_p8pzPcYi4qWmFwb3poU3BKMFE', '0B_p8pzPcYi4qb1JSdXBscGFHTEE', '0B_p8pzPcYi4qVWQ0dGNzMXZkT0U', '0B_p8pzPcYi4qdEYtdUxRWjJEWkE', '0B_p8pzPcYi4qSm5GNjNhVHBNNVE', '0B_p8pzPcYi4qNHVZSjhXRFpzTkU', '0B_p8pzPcYi4qbEloTjF3dER0Ync', '0B_p8pzPcYi4qUHZ5VmhRTldSbjQ', '0B_p8pzPcYi4qZm9fcElYc0NJVnM', '0B_p8pzPcYi4qSFlFa1dqcjg2MnM', '0B_p8pzPcYi4qUEdUNW50c3RxUkk', '0B_p8pzPcYi4qWEZhb3pVajhvYkk', '0B_p8pzPcYi4qdE45TE1pQWdxZlE', '0B_p8pzPcYi4qSWI3dE4ybzVRYzA', '0B_p8pzPcYi4qOXVKYVZTOFhBY2M', '0B_p8pzPcYi4qWVdoMlp1bGxiVms', '0B_p8pzPcYi4qeHR5ckk1cGFYVk0', '0B_p8pzPcYi4qcHVNcVJhdDR5dVE', '0B_p8pzPcYi4qd3Y2N3dhWm1CcVE', '0B_p8pzPcYi4qREd1NmVXNlBuYzg', '0B_p8pzPcYi4qTE9iQW5xRXFScms', '0B_p8pzPcYi4qYVFfSFh2NEpnbjA', '0B_p8pzPcYi4qM1ZfbmtUd0dBaVE', '0B_p8pzPcYi4qQ0hBM2ZFcW9zYXc', '0B_p8pzPcYi4qZk9oSHpocE9EeUU', '0B_p8pzPcYi4qUmk0SnIwb0ZhbkE', '0B_p8pzPcYi4qUEpfZkJCS0hMRnM', '0B_p8pzPcYi4qY1ZadHJKejVsaGc', '0B_p8pzPcYi4qNE1mdEdpWlVhQVU', '0B_p8pzPcYi4qcUJLT3BZNlBKZlU', '0B_p8pzPcYi4qbzFKNEZHZzlIbHM', '0B_p8pzPcYi4qX0xpWEYzOWNUaXM', '0B_p8pzPcYi4qUThqeHVYYVZoakE', '0B_p8pzPcYi4qZjlHWW84Wm9sUEE', '0B_p8pzPcYi4qeXBSZVZub2hVUFU', '0B_p8pzPcYi4qOHFtSGFXT3VWYzQ', '0B_p8pzPcYi4qRnV5c3d3ZnJBcFU', '0B_p8pzPcYi4qdVRGMlp2ZFpBUXM', '0B_p8pzPcYi4qUlFUckU1TmtNQ2s', '0B_p8pzPcYi4qZE9PZXR6NlQ2aWs', '0B_p8pzPcYi4qWjNOaFZud0lBUXM', '0B_p8pzPcYi4qaWJPbWJYQlBhUHc', '0B_p8pzPcYi4qZXJvNUlUMFVKWms', '0B_p8pzPcYi4qbnpTMDFadExuSnM', '0B_p8pzPcYi4qakE3ZU10Q2RKZVk', '0B_p8pzPcYi4qSUtjX3AzWXBaems', '0B_p8pzPcYi4qd1dKRlBEdWJmZEU', '0B_p8pzPcYi4qcVZhcVl6Ym9Hbms', '0B_p8pzPcYi4qdGxQRjVldzFUNFU', '0B_p8pzPcYi4qYWdBRllPWjYzUmc', '0B_p8pzPcYi4qOFZLY2l1elZuNHM', '0B_p8pzPcYi4qQ1VBaURqZXdHTG8', '0B_p8pzPcYi4qbEltbUhHZW5lMXM', '0B_p8pzPcYi4qUXFxb2FDd0ZsWHM', '0B_p8pzPcYi4qdnozaVlGUl9HYWs', '0B_p8pzPcYi4qME80cnY1d1p6NkE', '0B_p8pzPcYi4qeEF3RFhPVzhaUkE', '0B_p8pzPcYi4qUGlUSldyOVdoQlk', '0B_p8pzPcYi4qeHR3VlliaHlTVWs', '0B_p8pzPcYi4qcWMzYWlVMExUa2M', '0B_p8pzPcYi4qZjhOdGJiR3ZnYWs', '0B_p8pzPcYi4qVzJvOWdScVBuMVU', '0B_p8pzPcYi4qUm10WFMwNHVzems', '0B_p8pzPcYi4qbFZLcGNXTzlabzg'];
 
-const KEY = 'chavescom_ep';
-let cur = parseInt(localStorage.getItem(KEY) || '0');
-const frame = document.getElementById('vframe');
+const KEY='chavescom_ep';
+let cur = parseInt(localStorage.getItem(KEY)||'0');
+const vid = document.getElementById('vid');
+const osd = document.getElementById('osd');
+const errDiv = document.getElementById('err');
+const errMsg = document.getElementById('err-msg');
+let osdTimer = null;
+
+// Monta URL de streaming direto do Google Drive
+// Formato que força o player nativo a usar o arquivo de vídeo diretamente
+function driveUrl(id) {
+  // uc?export=download faz redirect direto para o stream do arquivo
+  // o parâmetro confirm=t pula a tela de aviso de arquivo grande
+  return 'https://drive.google.com/uc?export=download&confirm=t&id=' + id;
+}
+
+function showOsd() {
+  osd.textContent = 'Ep ' + (cur + 1);
+  osd.classList.remove('hidden');
+  clearTimeout(osdTimer);
+  osdTimer = setTimeout(() => osd.classList.add('hidden'), 3000);
+}
 
 function load(idx) {
   if (idx < 0) idx = EPS.length - 1;
   if (idx >= EPS.length) idx = 0;
   cur = idx;
   localStorage.setItem(KEY, cur);
-  frame.src = 'https://drive.google.com/file/d/' + EPS[cur] + '/preview?autoplay=1&controls=0';
+  errDiv.classList.remove('show');
+  vid.src = driveUrl(EPS[cur]);
+  vid.load();
+  vid.play().catch(() => {});
+  showOsd();
 }
+
 function next() { load(cur + 1); }
 function prev() { load(cur - 1); }
+function retryLoad() { load(cur); }
 
-document.getElementById('btn-prev').addEventListener('click', prev);
-document.getElementById('btn-next').addEventListener('click', next);
+// Auto-avança para o próximo episódio
+vid.addEventListener('ended', next);
 
-document.addEventListener('keydown', function(e) {
-  if (e.keyCode === 39 || e.keyCode === 38) { e.preventDefault(); next(); }
-  if (e.keyCode === 37 || e.keyCode === 40) { e.preventDefault(); prev(); }
+// Erro de carregamento
+vid.addEventListener('error', function() {
+  errMsg.textContent = 'Erro ao carregar Ep ' + (cur+1) + '. Verifique a conexão.';
+  errDiv.classList.add('show');
 });
 
-let sx = null;
-document.addEventListener('touchstart', function(e) { sx = e.touches[0].clientX; }, {passive:true});
+// Toque nas zonas laterais
+document.getElementById('tz-prev').addEventListener('click', prev);
+document.getElementById('tz-next').addEventListener('click', next);
+
+// Teclado / controle remoto TV Box
+// D-Pad: 37=esq, 38=cima, 39=dir, 40=baixo
+// Media keys: 179=play/pause, 176=next, 177=prev
+// HDMI CEC / Android TV: MediaNext=87, MediaPrev=88, MediaPlay=126, MediaPause=127
+document.addEventListener('keydown', function(e) {
+  switch(e.keyCode) {
+    case 37: case 177: case 88: // Esquerda / MediaPrev
+      e.preventDefault(); prev(); break;
+    case 39: case 176: case 87: // Direita / MediaNext
+      e.preventDefault(); next(); break;
+    case 38: case 40: // Cima/Baixo — mostrar OSD
+      e.preventDefault(); showOsd(); break;
+    case 179: case 32: case 13: // Play/Pause / Enter
+      e.preventDefault();
+      if (vid.paused) vid.play(); else vid.pause();
+      showOsd(); break;
+  }
+});
+
+// Swipe touch
+let sx = null, sy = null;
+document.addEventListener('touchstart', function(e) {
+  sx = e.touches[0].clientX; sy = e.touches[0].clientY;
+}, {passive: true});
 document.addEventListener('touchend', function(e) {
   if (sx === null) return;
   const dx = e.changedTouches[0].clientX - sx;
-  if (Math.abs(dx) > 60) { dx < 0 ? next() : prev(); }
-  sx = null;
-}, {passive:true});
+  const dy = e.changedTouches[0].clientY - sy;
+  if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy)) {
+    dx < 0 ? next() : prev();
+  }
+  sx = null; sy = null;
+}, {passive: true});
 
+// Iniciar
 load(cur);
 </script>
 </body>
