@@ -5,12 +5,12 @@ import android.graphics.Color;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.Log;
+import android.view.KeyEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
-import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -32,44 +32,108 @@ public class MainActivity extends Activity {
     private static final String TAG = "ChavesCom";
     private final Handler mainHandler = new Handler();
 
-    // Interface exposta ao JavaScript: window.Android.autoplay()
+    // Bridge JS -> Java
     class AndroidBridge {
         @JavascriptInterface
         public void autoplay() {
             mainHandler.post(new Runnable() {
-                @Override
-                public void run() {
-                    injectAutoplay();
-                }
+                @Override public void run() { injectPlayClick(); }
             });
         }
     }
 
-    // Injeta JS dentro do iframe do Drive para clicar no botão de play
-    private void injectAutoplay() {
+    /**
+     * Injeta um clique real no centro do iframe via evaluateJavascript.
+     * Roda na UI thread com privilégio nativo — o Drive reconhece como gesto real.
+     */
+    private void injectPlayClick() {
         if (webView == null) return;
-        // Avalia no contexto da página principal (localhost)
-        // Busca o iframe e tenta disparar um clique no centro dele via coordenadas reais
         String js =
-            "(function() {" +
-            "  var f = document.getElementById('frame');" +
-            "  if (!f) return;" +
-            "  var r = f.getBoundingClientRect();" +
-            "  var cx = r.left + r.width/2;" +
-            "  var cy = r.top  + r.height/2;" +
-            // Dispara touchstart + touchend no elemento — WebView reconhece como gesto real
-            "  var el = document.elementFromPoint(cx, cy) || f;" +
-            "  function fire(type) {" +
-            "    var e = new MouseEvent(type, {bubbles:true,cancelable:true,clientX:cx,clientY:cy,view:window});" +
-            "    el.dispatchEvent(e);" +
-            "  }" +
-            "  fire('mousedown');" +
-            "  fire('mouseup');" +
-            "  fire('click');" +
+            "(function(){" +
+            "  var f=document.getElementById('frame');" +
+            "  if(!f)return;" +
+            "  var r=f.getBoundingClientRect();" +
+            "  var cx=Math.round(r.left+r.width/2);" +
+            "  var cy=Math.round(r.top+r.height/2);" +
+            "  var el=document.elementFromPoint(cx,cy)||f;" +
+            // Série completa de eventos de pointer/mouse/touch
+            "  ['pointerdown','mousedown','pointerup','mouseup','click'].forEach(function(t){" +
+            "    el.dispatchEvent(new MouseEvent(t,{bubbles:true,cancelable:true,clientX:cx,clientY:cy,view:window}));" +
+            "  });" +
             "})();";
         webView.evaluateJavascript(js, null);
     }
 
+    // ---------------------------------------------------------------
+    // Interceptar teclas ANTES do WebView receber — Java nativo
+    // ---------------------------------------------------------------
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        int code = event.getKeyCode();
+
+        // OK / D-PAD CENTER / ENTER → play/pause
+        if (code == KeyEvent.KEYCODE_DPAD_CENTER ||
+            code == KeyEvent.KEYCODE_ENTER       ||
+            code == KeyEvent.KEYCODE_NUMPAD_ENTER) {
+
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                mainHandler.post(new Runnable() {
+                    @Override public void run() { injectPlayClick(); }
+                });
+            }
+            return true; // consome — não passa pro WebView
+        }
+
+        // D-PAD LEFT / MEDIA_PREVIOUS / REWIND → episódio anterior
+        if (code == KeyEvent.KEYCODE_DPAD_LEFT        ||
+            code == KeyEvent.KEYCODE_MEDIA_PREVIOUS   ||
+            code == KeyEvent.KEYCODE_MEDIA_REWIND) {
+
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                mainHandler.post(new Runnable() {
+                    @Override public void run() {
+                        webView.evaluateJavascript(
+                            "(function(){" +
+                            "  if(typeof load==='function'&&typeof cur!=='undefined'){" +
+                            "    var z=document.getElementById('zone-left');" +
+                            "    if(z){z.classList.add('active');setTimeout(function(){z.classList.remove('active');},350);}" +
+                            "    load(cur-1);" +
+                            "  }" +
+                            "})();", null);
+                    }
+                });
+            }
+            return true;
+        }
+
+        // D-PAD RIGHT / MEDIA_NEXT / FAST_FORWARD → próximo episódio
+        if (code == KeyEvent.KEYCODE_DPAD_RIGHT       ||
+            code == KeyEvent.KEYCODE_MEDIA_NEXT       ||
+            code == KeyEvent.KEYCODE_MEDIA_FAST_FORWARD) {
+
+            if (event.getAction() == KeyEvent.ACTION_DOWN) {
+                mainHandler.post(new Runnable() {
+                    @Override public void run() {
+                        webView.evaluateJavascript(
+                            "(function(){" +
+                            "  if(typeof load==='function'&&typeof cur!=='undefined'){" +
+                            "    var z=document.getElementById('zone-right');" +
+                            "    if(z){z.classList.add('active');setTimeout(function(){z.classList.remove('active');},350);}" +
+                            "    load(cur+1);" +
+                            "  }" +
+                            "})();", null);
+                    }
+                });
+            }
+            return true;
+        }
+
+        return super.dispatchKeyEvent(event);
+    }
+
+    // ---------------------------------------------------------------
+    // Servidor HTTP local
+    // ---------------------------------------------------------------
     static class LocalServer {
         private final ServerSocket serverSocket;
         private final ExecutorService pool = Executors.newCachedThreadPool();
@@ -83,14 +147,12 @@ public class MainActivity extends Activity {
 
         void start() {
             pool.execute(new Runnable() {
-                @Override
-                public void run() {
+                @Override public void run() {
                     while (running) {
                         try {
                             final Socket client = serverSocket.accept();
                             pool.execute(new Runnable() {
-                                @Override
-                                public void run() { handle(client); }
+                                @Override public void run() { handle(client); }
                             });
                         } catch (IOException ignored) {}
                     }
@@ -105,18 +167,16 @@ public class MainActivity extends Activity {
         }
 
         private byte[] readAllBytes(InputStream in) throws IOException {
-            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ByteArrayOutputStream buf = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
             int n;
-            while ((n = in.read(chunk)) != -1) {
-                buffer.write(chunk, 0, n);
-            }
-            return buffer.toByteArray();
+            while ((n = in.read(chunk)) != -1) buf.write(chunk, 0, n);
+            return buf.toByteArray();
         }
 
         private void handle(Socket client) {
             try {
-                InputStream in = client.getInputStream();
+                InputStream in  = client.getInputStream();
                 OutputStream out = client.getOutputStream();
 
                 StringBuilder sb = new StringBuilder();
@@ -127,7 +187,7 @@ public class MainActivity extends Activity {
                     if (s.endsWith("\r\n\r\n") || s.length() > 8192) break;
                 }
 
-                String req = sb.toString();
+                String req  = sb.toString();
                 String path = "/index.html";
                 if (req.startsWith("GET ")) {
                     String[] parts = req.split(" ");
@@ -144,20 +204,16 @@ public class MainActivity extends Activity {
                     InputStream asset = assets.open(assetPath);
                     byte[] data = readAllBytes(asset);
                     asset.close();
-
-                    String header = "HTTP/1.1 200 OK\r\n" +
-                        "Content-Type: " + mime + "\r\n" +
-                        "Content-Length: " + data.length + "\r\n" +
-                        "Connection: close\r\n\r\n";
+                    String header = "HTTP/1.1 200 OK\r\nContent-Type: " + mime +
+                        "\r\nContent-Length: " + data.length + "\r\nConnection: close\r\n\r\n";
                     out.write(header.getBytes(Charset.forName("UTF-8")));
                     out.write(data);
                 } catch (IOException e) {
                     byte[] body = "Not Found".getBytes(Charset.forName("UTF-8"));
-                    String resp = "HTTP/1.1 404 Not Found\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
-                    out.write(resp.getBytes(Charset.forName("UTF-8")));
+                    out.write(("HTTP/1.1 404 Not Found\r\nContent-Length: " + body.length +
+                        "\r\nConnection: close\r\n\r\n").getBytes(Charset.forName("UTF-8")));
                     out.write(body);
                 }
-
                 out.flush();
                 client.close();
             } catch (IOException e) {
@@ -176,31 +232,31 @@ public class MainActivity extends Activity {
         }
     }
 
+    // ---------------------------------------------------------------
+    // Ciclo de vida
+    // ---------------------------------------------------------------
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         requestWindowFeature(Window.FEATURE_NO_TITLE);
         getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN |
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN |
-            WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
+            WindowManager.LayoutParams.FLAG_FULLSCREEN | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
+            WindowManager.LayoutParams.FLAG_FULLSCREEN | WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON
         );
 
         final int uiFlags =
-            View.SYSTEM_UI_FLAG_FULLSCREEN |
-            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-            View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
-            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+            View.SYSTEM_UI_FLAG_FULLSCREEN         |
+            View.SYSTEM_UI_FLAG_HIDE_NAVIGATION    |
+            View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY   |
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE      |
+            View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN  |
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
         getWindow().getDecorView().setSystemUiVisibility(uiFlags);
 
         try {
             localServer = new LocalServer(getAssets());
             localServer.start();
-            Log.d(TAG, "Servidor HTTP local na porta " + PORT);
         } catch (IOException e) {
             Log.e(TAG, "Erro servidor: " + e.getMessage());
         }
@@ -213,7 +269,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);  // autoplay sem gesto
+        s.setMediaPlaybackRequiresUserGesture(false);
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setAllowFileAccess(true);
@@ -227,23 +283,17 @@ public class MainActivity extends Activity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setDefaultTextEncodingName("UTF-8");
 
-        // Expor bridge Android → JS
         webView.addJavascriptInterface(new AndroidBridge(), "Android");
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 getWindow().getDecorView().setSystemUiVisibility(uiFlags);
-
-                // Quando a página principal (localhost) termina de carregar,
-                // aguardar 1s e tentar autoplay do iframe via JS
+                // Autoplay automático ao carregar a página
                 if (url != null && url.contains("localhost")) {
                     mainHandler.postDelayed(new Runnable() {
-                        @Override
-                        public void run() {
-                            injectAutoplay();
-                        }
-                    }, 1000);
+                        @Override public void run() { injectPlayClick(); }
+                    }, 2000);
                 }
             }
         });
@@ -257,11 +307,11 @@ public class MainActivity extends Activity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             getWindow().getDecorView().setSystemUiVisibility(
-                View.SYSTEM_UI_FLAG_FULLSCREEN |
-                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION |
-                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY |
-                View.SYSTEM_UI_FLAG_LAYOUT_STABLE |
-                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN |
+                View.SYSTEM_UI_FLAG_FULLSCREEN         |
+                View.SYSTEM_UI_FLAG_HIDE_NAVIGATION    |
+                View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY   |
+                View.SYSTEM_UI_FLAG_LAYOUT_STABLE      |
+                View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN  |
                 View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
             );
         }
