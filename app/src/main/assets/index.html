@@ -22,6 +22,31 @@
       top: 0; left: 0; width: 100%; height: 100%;
       border: 0; background: #000;
     }
+
+    /* ===== ZONAS DE TOQUE NAS LATERAIS ===== */
+    .zone {
+      position: absolute; top: 0; height: 100%;
+      width: 22%;          /* 22% da largura em cada lado */
+      z-index: 25;
+      background: transparent;
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+    }
+    #zone-left  { left: 0; }
+    #zone-right { right: 0; }
+
+    /* Flash visual ao tocar */
+    .zone-flash {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      font-size: 32px; opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.15s;
+    }
+    #zone-left  .zone-flash { left:  10px; }
+    #zone-right .zone-flash { right: 10px; }
+    .zone.active .zone-flash { opacity: 1; }
+
+    /* ===== TOPBAR ===== */
     #topbar {
       position: absolute; top: 0; left: 0; right: 0;
       z-index: 30;
@@ -43,20 +68,21 @@
       border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer;
     }
 
-    /* Feedback visual de navegação */
+    /* Feedback central nav */
     #nav-feedback {
       position: absolute; top: 50%; left: 50%;
       transform: translate(-50%, -50%);
       z-index: 35;
-      background: rgba(0,0,0,0.75);
+      background: rgba(0,0,0,0.7);
       color: #fff; font-size: 28px; font-weight: 700;
       border-radius: 50%; width: 70px; height: 70px;
       display: flex; align-items: center; justify-content: center;
       opacity: 0; pointer-events: none;
-      transition: opacity 0.3s;
+      transition: opacity 0.25s;
     }
     #nav-feedback.show { opacity: 1; }
 
+    /* Loading */
     #loading {
       position: absolute; inset: 0; z-index: 40;
       background: #000;
@@ -75,10 +101,14 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    #overlay {
-      position: absolute; inset: 0;
+    /* Overlay central (só a faixa do meio — entre as zonas) */
+    #overlay-center {
+      position: absolute;
+      top: 0; left: 22%; right: 22%; height: 100%;
       z-index: 20; background: transparent;
     }
+
+    /* Lista */
     #ep-list {
       display: none; position: absolute; inset: 0; z-index: 50;
       background: rgba(0,0,0,0.96);
@@ -111,7 +141,13 @@
     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
   ></iframe>
 
-  <div id="overlay"></div>
+  <!-- Zonas de toque laterais — FICAM NA FRENTE do iframe -->
+  <div id="zone-left"  class="zone"><span class="zone-flash">◀◀</span></div>
+  <div id="zone-right" class="zone"><span class="zone-flash">▶▶</span></div>
+
+  <!-- Overlay central para mostrar topbar -->
+  <div id="overlay-center"></div>
+
   <div id="nav-feedback"></div>
 
   <div id="topbar">
@@ -278,24 +314,26 @@ var KEY = 'chavescom_ep';
 var cur = parseInt(localStorage.getItem(KEY) || '0');
 if (isNaN(cur) || cur < 0 || cur >= EPS.length) cur = 0;
 
-var frame       = document.getElementById('frame');
-var titleEl     = document.getElementById('ep-title');
-var counterEl   = document.getElementById('ep-counter');
-var loading     = document.getElementById('loading');
-var loadTxt     = document.getElementById('loading-txt');
-var topbar      = document.getElementById('topbar');
-var epList      = document.getElementById('ep-list');
-var epItems     = document.getElementById('ep-items');
-var overlay     = document.getElementById('overlay');
-var navFeedback = document.getElementById('nav-feedback');
+var frame         = document.getElementById('frame');
+var titleEl       = document.getElementById('ep-title');
+var counterEl     = document.getElementById('ep-counter');
+var loading       = document.getElementById('loading');
+var loadTxt       = document.getElementById('loading-txt');
+var topbar        = document.getElementById('topbar');
+var epList        = document.getElementById('ep-list');
+var epItems       = document.getElementById('ep-items');
+var zoneLeft      = document.getElementById('zone-left');
+var zoneRight     = document.getElementById('zone-right');
+var overlayCenter = document.getElementById('overlay-center');
+var navFeedback   = document.getElementById('nav-feedback');
 
-var topbarTimer    = null;
-var feedbackTimer  = null;
-var listVisible    = false;
-var autoplayDone   = false;
-var isLoading      = false;
+var topbarTimer   = null;
+var feedbackTimer = null;
+var listVisible   = false;
+var autoplayDone  = false;
+var isLoading     = false;
 
-// ---- Lista de episódios ----
+// ---- Lista ----
 EPS.forEach(function(ep, i) {
   var div = document.createElement('div');
   div.className = 'ep-item' + (i === cur ? ' active' : '');
@@ -314,17 +352,17 @@ function mostrarTopbar() {
   }, 4000);
 }
 
-// ---- Feedback visual (← →) ----
+// ---- Feedback central ----
 function showFeedback(symbol) {
   navFeedback.textContent = symbol;
   navFeedback.classList.add('show');
   clearTimeout(feedbackTimer);
   feedbackTimer = setTimeout(function() {
     navFeedback.classList.remove('show');
-  }, 600);
+  }, 700);
 }
 
-// ---- Carregar episódio ----
+// ---- Carregar ----
 function driveUrl(id) {
   return 'https://drive.google.com/file/d/' + id + '/preview?rm=minimal';
 }
@@ -348,11 +386,9 @@ function load(idx) {
 
   loading.classList.remove('oculto');
   loadTxt.textContent = ep.title;
-  overlay.style.display = 'none';
 
   frame.src = '';
   setTimeout(function() { frame.src = driveUrl(ep.driveId); }, 100);
-
   mostrarTopbar();
 }
 
@@ -369,12 +405,7 @@ function tryAutoplay() {
   if (autoplayDone) return;
   autoplayDone = true;
   var rect = frame.getBoundingClientRect();
-  var cx = Math.round(rect.left + rect.width  / 2);
-  var cy = Math.round(rect.top  + rect.height / 2);
-  overlay.style.display = 'block';
-  overlay.style.pointerEvents = 'auto';
-  simulateClick(cx, cy);
-  setTimeout(function() { overlay.style.display = 'none'; }, 300);
+  simulateClick(Math.round(rect.left + rect.width / 2), Math.round(rect.top + rect.height / 2));
 }
 
 frame.addEventListener('load', function() {
@@ -386,96 +417,83 @@ frame.addEventListener('load', function() {
   mostrarTopbar();
 });
 
-// ---- Overlay toque ----
-overlay.addEventListener('click', function() { mostrarTopbar(); });
+// ---- ZONAS LATERAIS — toque simples passa episódio ----
+function flashZone(zone) {
+  zone.classList.add('active');
+  setTimeout(function() { zone.classList.remove('active'); }, 350);
+}
+
+zoneLeft.addEventListener('click', function(e) {
+  e.stopPropagation();
+  flashZone(zoneLeft);
+  showFeedback('◀◀');
+  load(cur - 1);
+});
+
+zoneRight.addEventListener('click', function(e) {
+  e.stopPropagation();
+  flashZone(zoneRight);
+  showFeedback('▶▶');
+  load(cur + 1);
+});
+
+// Touch direto nas zonas (para TV com touch)
+zoneLeft.addEventListener('touchend', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  flashZone(zoneLeft);
+  showFeedback('◀◀');
+  load(cur - 1);
+}, {passive: false});
+
+zoneRight.addEventListener('touchend', function(e) {
+  e.preventDefault(); e.stopPropagation();
+  flashZone(zoneRight);
+  showFeedback('▶▶');
+  load(cur + 1);
+}, {passive: false});
+
+// ---- Centro mostra topbar ----
+overlayCenter.addEventListener('click', function() { mostrarTopbar(); });
+overlayCenter.addEventListener('touchend', function(e) {
+  e.preventDefault();
+  mostrarTopbar();
+}, {passive: false});
 
 // ---- Lista ----
 function toggleList() {
   listVisible = !listVisible;
   epList.classList.toggle('show', listVisible);
-  overlay.style.display = listVisible ? 'none' : 'block';
   if (listVisible) {
     var a = document.getElementById('epitem-' + cur);
     if (a) a.scrollIntoView({ block: 'center', behavior: 'smooth' });
   }
 }
 
-// ---- Swipe ----
-var swipeX = null;
-document.addEventListener('touchstart', function(e) {
-  swipeX = e.touches[0].clientX;
-}, {passive: true});
-document.addEventListener('touchend', function(e) {
-  if (swipeX === null) return;
-  var dx = e.changedTouches[0].clientX - swipeX;
-  swipeX = null;
-  if (listVisible) return;
-  if (Math.abs(dx) > 80) {
-    if (dx < 0) { showFeedback('▶▶'); load(cur + 1); }
-    else         { showFeedback('◀◀'); load(cur - 1); }
-  } else {
-    mostrarTopbar();
-  }
-}, {passive: true});
-
-// ---- Controle remoto — TODOS os keyCodes de TV Android ----
-// https://developer.android.com/reference/android/view/KeyEvent
-// DPAD_LEFT=21, DPAD_RIGHT=22, DPAD_UP=19, DPAD_DOWN=20, DPAD_CENTER=23
-// ENTER=66, BACK=4, MENU=82
-// MEDIA_PREVIOUS=88, MEDIA_NEXT=87, MEDIA_REWIND=89, MEDIA_FAST_FORWARD=90
-// Arrow keys normais: LEFT=37, RIGHT=39, UP=38, DOWN=40
-// Alguns controles mandam keyCodes de gamepad: 96-107
-
+// ---- Controle remoto (todos os keyCodes de TV Android) ----
 document.addEventListener('keydown', function(e) {
   var k = e.keyCode;
-
-  // Na lista: só fechar com BACK ou MENU
   if (listVisible) {
-    if (k === 4 || k === 8 || k === 27 || k === 82) {
-      e.preventDefault(); toggleList();
-    }
+    if (k===4||k===8||k===27||k===82) { e.preventDefault(); toggleList(); }
     return;
   }
-
-  // PRÓXIMO episódio: D-PAD RIGHT, seta direita, MEDIA_NEXT, FAST_FORWARD
-  if (k === 22 || k === 39 || k === 87 || k === 90 || k === 176) {
-    e.preventDefault();
-    showFeedback('▶▶');
-    load(cur + 1);
-    return;
+  // Próximo: DPAD_RIGHT(22), →(39), MEDIA_NEXT(87), FF(90), 176
+  if (k===22||k===39||k===87||k===90||k===176) {
+    e.preventDefault(); showFeedback('▶▶'); load(cur+1); return;
   }
-
-  // ANTERIOR episódio: D-PAD LEFT, seta esquerda, MEDIA_PREVIOUS, REWIND
-  if (k === 21 || k === 37 || k === 88 || k === 89 || k === 177) {
-    e.preventDefault();
-    showFeedback('◀◀');
-    load(cur - 1);
-    return;
+  // Anterior: DPAD_LEFT(21), ←(37), MEDIA_PREV(88), RW(89), 177
+  if (k===21||k===37||k===88||k===89||k===177) {
+    e.preventDefault(); showFeedback('◀◀'); load(cur-1); return;
   }
-
-  // MOSTRAR BARRA: D-PAD CENTER, Enter, OK, seta cima/baixo, espaço
-  if (k === 23 || k === 13 || k === 66 || k === 32 || k === 19 || k === 20 || k === 38 || k === 40) {
-    e.preventDefault();
-    mostrarTopbar();
-    return;
+  // Mostrar barra: DPAD_CENTER(23), Enter(13/66), cima/baixo(19/20/38/40), espaço(32)
+  if (k===23||k===13||k===66||k===32||k===19||k===20||k===38||k===40) {
+    e.preventDefault(); mostrarTopbar(); return;
   }
+  // Lista: MENU(82), M(77), I(73)
+  if (k===82||k===77||k===73) { e.preventDefault(); toggleList(); return; }
+  // Voltar
+  if (k===4||k===8||k===27) { e.preventDefault(); return; }
+}, true);
 
-  // LISTA: MENU, tecla M ou I
-  if (k === 82 || k === 77 || k === 73) {
-    e.preventDefault();
-    toggleList();
-    return;
-  }
-
-  // BACK: fechar lista ou sair
-  if (k === 4 || k === 8 || k === 27) {
-    e.preventDefault();
-    if (listVisible) toggleList();
-    return;
-  }
-}, true); // true = captura na fase de capture, antes do iframe receber
-
-// ---- Iniciar ----
 load(cur);
 </script>
 </body>
