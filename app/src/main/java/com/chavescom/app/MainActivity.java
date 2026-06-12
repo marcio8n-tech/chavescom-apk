@@ -3,11 +3,14 @@ package com.chavescom.app;
 import android.app.Activity;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -27,6 +30,45 @@ public class MainActivity extends Activity {
     private LocalServer localServer;
     private static final int PORT = 8765;
     private static final String TAG = "ChavesCom";
+    private final Handler mainHandler = new Handler();
+
+    // Interface exposta ao JavaScript: window.Android.autoplay()
+    class AndroidBridge {
+        @JavascriptInterface
+        public void autoplay() {
+            mainHandler.post(new Runnable() {
+                @Override
+                public void run() {
+                    injectAutoplay();
+                }
+            });
+        }
+    }
+
+    // Injeta JS dentro do iframe do Drive para clicar no botão de play
+    private void injectAutoplay() {
+        if (webView == null) return;
+        // Avalia no contexto da página principal (localhost)
+        // Busca o iframe e tenta disparar um clique no centro dele via coordenadas reais
+        String js =
+            "(function() {" +
+            "  var f = document.getElementById('frame');" +
+            "  if (!f) return;" +
+            "  var r = f.getBoundingClientRect();" +
+            "  var cx = r.left + r.width/2;" +
+            "  var cy = r.top  + r.height/2;" +
+            // Dispara touchstart + touchend no elemento — WebView reconhece como gesto real
+            "  var el = document.elementFromPoint(cx, cy) || f;" +
+            "  function fire(type) {" +
+            "    var e = new MouseEvent(type, {bubbles:true,cancelable:true,clientX:cx,clientY:cy,view:window});" +
+            "    el.dispatchEvent(e);" +
+            "  }" +
+            "  fire('mousedown');" +
+            "  fire('mouseup');" +
+            "  fire('click');" +
+            "})();";
+        webView.evaluateJavascript(js, null);
+    }
 
     static class LocalServer {
         private final ServerSocket serverSocket;
@@ -62,7 +104,6 @@ public class MainActivity extends Activity {
             pool.shutdown();
         }
 
-        // Leitura compatível com Java 8 / Android 5+
         private byte[] readAllBytes(InputStream in) throws IOException {
             ByteArrayOutputStream buffer = new ByteArrayOutputStream();
             byte[] chunk = new byte[4096];
@@ -78,7 +119,6 @@ public class MainActivity extends Activity {
                 InputStream in = client.getInputStream();
                 OutputStream out = client.getOutputStream();
 
-                // Ler request line completa
                 StringBuilder sb = new StringBuilder();
                 int b;
                 while ((b = in.read()) != -1) {
@@ -94,7 +134,6 @@ public class MainActivity extends Activity {
                     if (parts.length >= 2) path = parts[1];
                     if (path.equals("/")) path = "/index.html";
                 }
-                // Remover query string
                 int q = path.indexOf('?');
                 if (q != -1) path = path.substring(0, q);
 
@@ -158,7 +197,6 @@ public class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
         getWindow().getDecorView().setSystemUiVisibility(uiFlags);
 
-        // Iniciar servidor local numa thread separada
         try {
             localServer = new LocalServer(getAssets());
             localServer.start();
@@ -175,7 +213,7 @@ public class MainActivity extends Activity {
         s.setJavaScriptEnabled(true);
         s.setDomStorageEnabled(true);
         s.setDatabaseEnabled(true);
-        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setMediaPlaybackRequiresUserGesture(false);  // autoplay sem gesto
         s.setAllowFileAccessFromFileURLs(true);
         s.setAllowUniversalAccessFromFileURLs(true);
         s.setAllowFileAccess(true);
@@ -189,15 +227,28 @@ public class MainActivity extends Activity {
         s.setCacheMode(WebSettings.LOAD_DEFAULT);
         s.setDefaultTextEncodingName("UTF-8");
 
+        // Expor bridge Android → JS
+        webView.addJavascriptInterface(new AndroidBridge(), "Android");
+
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public void onPageFinished(WebView view, String url) {
                 getWindow().getDecorView().setSystemUiVisibility(uiFlags);
+
+                // Quando a página principal (localhost) termina de carregar,
+                // aguardar 1s e tentar autoplay do iframe via JS
+                if (url != null && url.contains("localhost")) {
+                    mainHandler.postDelayed(new Runnable() {
+                        @Override
+                        public void run() {
+                            injectAutoplay();
+                        }
+                    }, 1000);
+                }
             }
         });
-        webView.setWebChromeClient(new WebChromeClient());
 
-        // Carregar via localhost — Referer será http://localhost, não file://
+        webView.setWebChromeClient(new WebChromeClient());
         webView.loadUrl("http://localhost:" + PORT + "/index.html");
     }
 
