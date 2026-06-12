@@ -12,12 +12,13 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
+import java.nio.charset.Charset;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -27,7 +28,6 @@ public class MainActivity extends Activity {
     private static final int PORT = 8765;
     private static final String TAG = "ChavesCom";
 
-    // Servidor HTTP local minimalista
     static class LocalServer {
         private final ServerSocket serverSocket;
         private final ExecutorService pool = Executors.newCachedThreadPool();
@@ -40,12 +40,18 @@ public class MainActivity extends Activity {
         }
 
         void start() {
-            pool.execute(() -> {
-                while (running) {
-                    try {
-                        Socket client = serverSocket.accept();
-                        pool.execute(() -> handle(client));
-                    } catch (IOException ignored) {}
+            pool.execute(new Runnable() {
+                @Override
+                public void run() {
+                    while (running) {
+                        try {
+                            final Socket client = serverSocket.accept();
+                            pool.execute(new Runnable() {
+                                @Override
+                                public void run() { handle(client); }
+                            });
+                        } catch (IOException ignored) {}
+                    }
                 }
             });
         }
@@ -56,53 +62,67 @@ public class MainActivity extends Activity {
             pool.shutdown();
         }
 
+        // Leitura compatível com Java 8 / Android 5+
+        private byte[] readAllBytes(InputStream in) throws IOException {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            byte[] chunk = new byte[4096];
+            int n;
+            while ((n = in.read(chunk)) != -1) {
+                buffer.write(chunk, 0, n);
+            }
+            return buffer.toByteArray();
+        }
+
         private void handle(Socket client) {
             try {
                 InputStream in = client.getInputStream();
                 OutputStream out = client.getOutputStream();
 
-                // Ler request line
+                // Ler request line completa
                 StringBuilder sb = new StringBuilder();
                 int b;
                 while ((b = in.read()) != -1) {
                     sb.append((char) b);
-                    if (sb.length() > 4 && sb.substring(sb.length()-4).equals("\r\n\r\n")) break;
-                    if (sb.length() > 8192) break;
+                    String s = sb.toString();
+                    if (s.endsWith("\r\n\r\n") || s.length() > 8192) break;
                 }
 
                 String req = sb.toString();
                 String path = "/index.html";
                 if (req.startsWith("GET ")) {
-                    path = req.split(" ")[1];
+                    String[] parts = req.split(" ");
+                    if (parts.length >= 2) path = parts[1];
                     if (path.equals("/")) path = "/index.html";
                 }
                 // Remover query string
-                if (path.contains("?")) path = path.substring(0, path.indexOf("?"));
+                int q = path.indexOf('?');
+                if (q != -1) path = path.substring(0, q);
 
                 String assetPath = path.startsWith("/") ? path.substring(1) : path;
                 String mime = getMime(assetPath);
 
                 try {
                     InputStream asset = assets.open(assetPath);
-                    byte[] data = asset.readAllBytes();
+                    byte[] data = readAllBytes(asset);
                     asset.close();
 
                     String header = "HTTP/1.1 200 OK\r\n" +
                         "Content-Type: " + mime + "\r\n" +
                         "Content-Length: " + data.length + "\r\n" +
-                        "Connection: close\r\n" +
-                        "Cache-Control: no-cache\r\n\r\n";
-                    out.write(header.getBytes(StandardCharsets.UTF_8));
+                        "Connection: close\r\n\r\n";
+                    out.write(header.getBytes(Charset.forName("UTF-8")));
                     out.write(data);
                 } catch (IOException e) {
-                    String resp = "HTTP/1.1 404 Not Found\r\nContent-Length: 9\r\nConnection: close\r\n\r\nNot Found";
-                    out.write(resp.getBytes(StandardCharsets.UTF_8));
+                    byte[] body = "Not Found".getBytes(Charset.forName("UTF-8"));
+                    String resp = "HTTP/1.1 404 Not Found\r\nContent-Length: " + body.length + "\r\nConnection: close\r\n\r\n";
+                    out.write(resp.getBytes(Charset.forName("UTF-8")));
+                    out.write(body);
                 }
 
                 out.flush();
                 client.close();
             } catch (IOException e) {
-                Log.e(TAG, "handle error: " + e.getMessage());
+                Log.e(TAG, "handle: " + e.getMessage());
             }
         }
 
@@ -138,13 +158,13 @@ public class MainActivity extends Activity {
             View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
         getWindow().getDecorView().setSystemUiVisibility(uiFlags);
 
-        // Iniciar servidor local
+        // Iniciar servidor local numa thread separada
         try {
             localServer = new LocalServer(getAssets());
             localServer.start();
-            Log.d(TAG, "Servidor local iniciado na porta " + PORT);
+            Log.d(TAG, "Servidor HTTP local na porta " + PORT);
         } catch (IOException e) {
-            Log.e(TAG, "Erro ao iniciar servidor: " + e.getMessage());
+            Log.e(TAG, "Erro servidor: " + e.getMessage());
         }
 
         webView = new WebView(this);
@@ -177,7 +197,7 @@ public class MainActivity extends Activity {
         });
         webView.setWebChromeClient(new WebChromeClient());
 
-        // Carregar via localhost em vez de file://
+        // Carregar via localhost — Referer será http://localhost, não file://
         webView.loadUrl("http://localhost:" + PORT + "/index.html");
     }
 
