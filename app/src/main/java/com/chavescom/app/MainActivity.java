@@ -7,9 +7,17 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.HashMap;
+import java.util.Map;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -37,8 +45,6 @@ public class MainActivity extends Activity {
 
         webView = new WebView(this);
         webView.setBackgroundColor(Color.BLACK);
-        // SEM setLayerType — deixa o sistema escolher o melhor modo
-        // Isso é o que o app original da Lovable fazia
         setContentView(webView);
 
         WebSettings s = webView.getSettings();
@@ -64,7 +70,65 @@ public class MainActivity extends Activity {
             public void onPageFinished(WebView view, String url) {
                 getWindow().getDecorView().setSystemUiVisibility(uiFlags);
             }
+
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
+
+                // Interceptar requisições ao Google Drive e remover o Referer file://
+                if (url.contains("drive.usercontent.google.com") || url.contains("drive.google.com")) {
+                    try {
+                        HttpURLConnection conn = (HttpURLConnection) new URL(url).openConnection();
+                        conn.setConnectTimeout(15000);
+                        conn.setReadTimeout(30000);
+                        conn.setInstanceFollowRedirects(true);
+
+                        // Copiar headers EXCETO Referer (que causa bloqueio do Google)
+                        for (Map.Entry<String, String> entry : request.getRequestHeaders().entrySet()) {
+                            String key = entry.getKey();
+                            if (!key.equalsIgnoreCase("Referer")) {
+                                conn.setRequestProperty(key, entry.getValue());
+                            }
+                        }
+
+                        // Garantir User-Agent compatível
+                        conn.setRequestProperty("User-Agent",
+                            "Mozilla/5.0 (Linux; Android 9) AppleWebKit/537.36 Chrome/74.0.3729.157 Mobile Safari/537.36");
+
+                        int code = conn.getResponseCode();
+                        String mimeType = conn.getContentType();
+                        if (mimeType == null) mimeType = "application/octet-stream";
+                        if (mimeType.contains(";")) mimeType = mimeType.split(";")[0].trim();
+
+                        // Montar headers de resposta
+                        Map<String, String> responseHeaders = new HashMap<>();
+                        for (int i = 0; ; i++) {
+                            String key = conn.getHeaderFieldKey(i);
+                            String val = conn.getHeaderField(i);
+                            if (key == null && val == null) break;
+                            if (key != null) responseHeaders.put(key, val);
+                        }
+
+                        InputStream stream = (code >= 200 && code < 300)
+                            ? conn.getInputStream()
+                            : conn.getErrorStream();
+
+                        return new WebResourceResponse(
+                            mimeType,
+                            "UTF-8",
+                            code,
+                            code == 200 ? "OK" : "Error",
+                            responseHeaders,
+                            stream
+                        );
+                    } catch (IOException e) {
+                        return null; // deixa a WebView tentar normalmente
+                    }
+                }
+                return null; // não interceptar outras URLs
+            }
         });
+
         webView.setWebChromeClient(new WebChromeClient());
         webView.loadUrl("file:///android_asset/index.html");
     }
