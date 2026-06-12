@@ -2,90 +2,123 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
   <title>Chaves.com</title>
   <style>
-    *{box-sizing:border-box;margin:0;padding:0}
-    html,body{width:100%;height:100%;background:#000;overflow:hidden;font-family:sans-serif}
-
-    #player{position:fixed;inset:0;background:#000}
-
-    /* Barra de título — some após 4s */
-    #topbar{
-      position:absolute;top:0;left:0;right:0;
-      background:linear-gradient(to bottom,rgba(0,0,0,0.9) 0%,transparent 100%);
-      padding:12px 16px 28px;
-      z-index:30;
-      opacity:1;
-      transition:opacity 0.6s ease;
-      pointer-events:auto;
-      display:flex;align-items:center;gap:10px;
-    }
-    #topbar.oculto{
-      opacity:0;
-      pointer-events:none;
-    }
-    #ep-title{color:#fff;font-size:16px;font-weight:700;text-shadow:0 1px 4px #000;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-    #ep-counter{color:rgba(255,255,255,0.65);font-size:13px;white-space:nowrap}
-    #btn-list{
-      background:rgba(255,255,255,0.18);border:none;color:#fff;
-      border-radius:6px;padding:5px 11px;font-size:13px;cursor:pointer;
-      flex-shrink:0;
+    html, body {
+      margin: 0; padding: 0;
+      width: 100%; height: 100%;
+      overflow: hidden;
+      background: #000;
+      font-family: sans-serif;
     }
 
-    /* iframe ocupa tudo */
-    #frame{
-      position:absolute;inset:0;
-      width:100%;height:100%;
-      border:none;background:#000;
+    /* Container principal — tamanho FIXO da tela, sem scroll */
+    #player {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100vw;
+      height: 100vh;
+      overflow: hidden;
+      background: #000;
     }
 
-    /* Overlay transparente para capturar toques sem bloquear o iframe */
-    #overlay{
-      position:absolute;inset:0;
-      z-index:20;
-      background:transparent;
-      /* Permite toque passar pro iframe via pointer-events none quando não precisa */
+    /* iframe cobre exatamente 100% da tela — sem escalar pra fora */
+    #frame {
+      display: block;
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      border: 0;
+      background: #000;
+    }
+
+    /* Barra de info */
+    #topbar {
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      z-index: 30;
+      background: linear-gradient(to bottom, rgba(0,0,0,0.88), transparent);
+      padding: 10px 14px 30px;
+      display: flex; align-items: center; gap: 8px;
+      opacity: 1;
+      transition: opacity 0.7s ease;
+    }
+    #topbar.oculto { opacity: 0; pointer-events: none; }
+
+    #ep-title {
+      flex: 1;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      text-shadow: 0 1px 4px #000;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    #ep-counter {
+      color: rgba(255,255,255,0.6);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    #btn-list {
+      background: rgba(255,255,255,0.15);
+      border: none; color: #fff;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 13px;
+      cursor: pointer;
+      flex-shrink: 0;
     }
 
     /* Loading */
-    #loading{
-      position:absolute;inset:0;z-index:40;
-      background:#000;
-      display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;
-      color:#fff;font-size:16px;
-      transition:opacity 0.5s;
+    #loading {
+      position: absolute; inset: 0; z-index: 40;
+      background: #000;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 14px; color: #fff; font-size: 15px;
+      transition: opacity 0.5s;
     }
-    #loading.oculto{opacity:0;pointer-events:none}
-    .spinner{
-      width:42px;height:42px;
-      border:4px solid rgba(255,255,255,0.15);
-      border-top-color:#e55000;
-      border-radius:50%;
-      animation:spin 0.8s linear infinite;
+    #loading.oculto { opacity: 0; pointer-events: none; }
+    .spinner {
+      width: 40px; height: 40px;
+      border: 4px solid rgba(255,255,255,0.12);
+      border-top-color: #e55000;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
     }
-    @keyframes spin{to{transform:rotate(360deg)}}
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Overlay invisível para capturar toque */
+    #overlay {
+      position: absolute; inset: 0;
+      z-index: 20;
+      background: transparent;
+    }
 
     /* Lista de episódios */
-    #ep-list{
-      display:none;
-      position:absolute;inset:0;z-index:50;
-      background:rgba(0,0,0,0.96);
-      overflow-y:auto;
-      padding:16px;
+    #ep-list {
+      display: none;
+      position: absolute; inset: 0; z-index: 50;
+      background: rgba(0,0,0,0.96);
+      overflow-y: auto;
+      padding: 14px;
+      -webkit-overflow-scrolling: touch;
     }
-    #ep-list.show{display:block}
-    #ep-list h2{color:#fff;margin-bottom:14px;font-size:18px;font-weight:700}
-    .ep-item{
-      padding:11px 14px;margin-bottom:5px;
-      background:rgba(255,255,255,0.07);
-      border-radius:8px;
-      color:#fff;font-size:14px;cursor:pointer;
-      display:flex;align-items:center;gap:10px;
-      border:2px solid transparent;
+    #ep-list.show { display: block; }
+    #ep-list h2 { color: #fff; margin-bottom: 12px; font-size: 17px; }
+    .ep-item {
+      padding: 10px 13px; margin-bottom: 5px;
+      background: rgba(255,255,255,0.07);
+      border-radius: 7px;
+      color: #fff; font-size: 14px; cursor: pointer;
+      display: flex; align-items: center; gap: 9px;
+      border: 2px solid transparent;
     }
-    .ep-item.active{background:rgba(229,80,0,0.5);border-color:#e55000}
-    .ep-num{color:rgba(255,255,255,0.4);font-size:12px;min-width:28px}
+    .ep-item.active { background: rgba(229,80,0,0.5); border-color: #e55000; }
+    .ep-num { color: rgba(255,255,255,0.35); font-size: 12px; min-width: 26px; }
   </style>
 </head>
 <body>
@@ -96,17 +129,14 @@
     <span id="loading-txt">Carregando...</span>
   </div>
 
-  <!-- O iframe fica atrás do overlay -->
   <iframe id="frame"
     allow="autoplay; encrypted-media; fullscreen; picture-in-picture"
     allowfullscreen
     sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
   ></iframe>
 
-  <!-- Overlay captura toques para mostrar UI -->
   <div id="overlay" onclick="tocou()"></div>
 
-  <!-- Barra de informações -->
   <div id="topbar">
     <span id="ep-title">Chaves.com</span>
     <span id="ep-counter"></span>
@@ -115,7 +145,6 @@
 
 </div>
 
-<!-- Lista de episódios -->
 <div id="ep-list">
   <h2>📺 Episódios</h2>
   <div id="ep-items"></div>
@@ -270,23 +299,23 @@ var EPS = [
 ];
 
 var KEY = 'chavescom_ep';
-var cur  = parseInt(localStorage.getItem(KEY) || '0');
+var cur = parseInt(localStorage.getItem(KEY) || '0');
 if (isNaN(cur) || cur < 0 || cur >= EPS.length) cur = 0;
 
-var frame    = document.getElementById('frame');
-var titleEl  = document.getElementById('ep-title');
-var counterEl= document.getElementById('ep-counter');
-var loading  = document.getElementById('loading');
-var loadTxt  = document.getElementById('loading-txt');
-var topbar   = document.getElementById('topbar');
-var epList   = document.getElementById('ep-list');
-var epItems  = document.getElementById('ep-items');
-var overlay  = document.getElementById('overlay');
+var frame     = document.getElementById('frame');
+var titleEl   = document.getElementById('ep-title');
+var counterEl = document.getElementById('ep-counter');
+var loading   = document.getElementById('loading');
+var loadTxt   = document.getElementById('loading-txt');
+var topbar    = document.getElementById('topbar');
+var epList    = document.getElementById('ep-list');
+var epItems   = document.getElementById('ep-items');
+var overlay   = document.getElementById('overlay');
 
 var topbarTimer = null;
 var listVisible = false;
 
-// -------- Gerar lista --------
+// Gerar lista
 EPS.forEach(function(ep, i) {
   var div = document.createElement('div');
   div.className = 'ep-item' + (i === cur ? ' active' : '');
@@ -296,10 +325,8 @@ EPS.forEach(function(ep, i) {
   epItems.appendChild(div);
 });
 
-// -------- Player --------
-function driveUrl(driveId) {
-  // &rm=minimal remove barra inferior do Drive (mais limpo na TV)
-  return 'https://drive.google.com/file/d/' + driveId + '/preview?rm=minimal';
+function driveUrl(id) {
+  return 'https://drive.google.com/file/d/' + id + '/preview?rm=minimal';
 }
 
 function load(idx) {
@@ -312,26 +339,18 @@ function load(idx) {
   titleEl.textContent  = ep.title;
   counterEl.textContent = (cur + 1) + ' / ' + EPS.length;
 
-  // Atualizar destaque na lista
   var items = document.querySelectorAll('.ep-item');
   for (var i = 0; i < items.length; i++) items[i].classList.remove('active');
-  var activeEl = document.getElementById('epitem-' + cur);
-  if (activeEl) activeEl.classList.add('active');
+  var a = document.getElementById('epitem-' + cur);
+  if (a) a.classList.add('active');
 
-  // Loading visível
   loading.classList.remove('oculto');
   loadTxt.textContent = ep.title;
-
-  // Esconder overlay durante carga para não bloquear o iframe
   overlay.style.pointerEvents = 'none';
 
-  // Carregar iframe
   frame.src = '';
-  setTimeout(function() {
-    frame.src = driveUrl(ep.driveId);
-  }, 80);
+  setTimeout(function() { frame.src = driveUrl(ep.driveId); }, 80);
 
-  // Mostrar topbar
   mostrarTopbar();
 }
 
@@ -340,111 +359,82 @@ function mostrarTopbar() {
   clearTimeout(topbarTimer);
   topbarTimer = setTimeout(function() {
     topbar.classList.add('oculto');
-  }, 4000); // some em 4 segundos
+  }, 4000);
 }
 
 function tocou() {
-  // Toque no overlay: mostrar topbar e depois liberar overlay para o iframe
   mostrarTopbar();
   overlay.style.pointerEvents = 'none';
-  setTimeout(function() {
-    overlay.style.pointerEvents = 'auto';
-  }, 4100);
+  setTimeout(function() { overlay.style.pointerEvents = 'auto'; }, 4200);
 }
 
-// Esconder loading quando iframe carrega
 frame.addEventListener('load', function() {
-  // Aguardar um pouco para o player interno do Drive renderizar
   setTimeout(function() {
     loading.classList.add('oculto');
-    // Tentar autoplay: injetar clique no play button do Drive via postMessage
     tryAutoplay();
   }, 1500);
-
-  // Reativar overlay após carga
-  setTimeout(function() {
-    overlay.style.pointerEvents = 'auto';
-  }, 2000);
-
+  setTimeout(function() { overlay.style.pointerEvents = 'auto'; }, 2000);
   mostrarTopbar();
 });
 
 function tryAutoplay() {
-  // O player do Google Drive aceita postMessage para controle
   try {
     frame.contentWindow.postMessage('{"event":"command","func":"playVideo","args":""}', '*');
   } catch(e) {}
-  // Também tentar via evento sintético — simular clique no centro do iframe
-  // A WebView Android bloqueia autoplay sem gesto do usuário,
-  // mas podemos simular um touch event via JS no documento pai
   try {
     var rect = frame.getBoundingClientRect();
     var cx = rect.left + rect.width  / 2;
     var cy = rect.top  + rect.height / 2;
     var el = document.elementFromPoint(cx, cy);
     if (el) {
-      // Disparar touchstart + touchend simula gesto do usuário
-      var ts = new TouchEvent('touchstart', {
-        bubbles:true, cancelable:true,
-        touches: [new Touch({identifier:1, target:el, clientX:cx, clientY:cy})]
+      ['touchstart','touchend'].forEach(function(type) {
+        try {
+          var t = new Touch({identifier: Date.now(), target: el, clientX: cx, clientY: cy});
+          el.dispatchEvent(new TouchEvent(type, {bubbles:true, cancelable:true,
+            touches: type==='touchstart'?[t]:[], changedTouches:[t]}));
+        } catch(e2) {}
       });
-      var te = new TouchEvent('touchend', {
-        bubbles:true, cancelable:true, touches: [],
-        changedTouches: [new Touch({identifier:1, target:el, clientX:cx, clientY:cy})]
-      });
-      el.dispatchEvent(ts);
-      setTimeout(function(){ el.dispatchEvent(te); }, 80);
     }
   } catch(e) {}
 }
 
-// -------- Lista --------
 function toggleList() {
   listVisible = !listVisible;
   epList.classList.toggle('show', listVisible);
+  overlay.style.pointerEvents = listVisible ? 'none' : 'auto';
   if (listVisible) {
     var a = document.getElementById('epitem-' + cur);
     if (a) a.scrollIntoView({ block: 'center', behavior: 'smooth' });
-    overlay.style.pointerEvents = 'none';
-  } else {
-    overlay.style.pointerEvents = 'auto';
   }
 }
 
-// -------- Swipe --------
+// Swipe
 var swipeX = null;
-document.addEventListener('touchstart', function(e) {
-  swipeX = e.touches[0].clientX;
-}, { passive: true });
+document.addEventListener('touchstart', function(e) { swipeX = e.touches[0].clientX; }, {passive:true});
 document.addEventListener('touchend', function(e) {
   if (swipeX === null) return;
   var dx = e.changedTouches[0].clientX - swipeX;
   swipeX = null;
   if (listVisible) return;
-  if (Math.abs(dx) > 80) {
-    if (dx < 0) load(cur + 1);
-    else         load(cur - 1);
-  } else {
-    tocou();
-  }
-}, { passive: true });
+  if (Math.abs(dx) > 80) { dx < 0 ? load(cur+1) : load(cur-1); }
+  else { tocou(); }
+}, {passive:true});
 
-// -------- Teclado / Controle remoto --------
+// Controle remoto
 document.addEventListener('keydown', function(e) {
   if (listVisible) {
-    if (e.keyCode === 27 || e.keyCode === 8) { e.preventDefault(); toggleList(); }
+    if (e.keyCode===27||e.keyCode===8) { e.preventDefault(); toggleList(); }
     return;
   }
   switch(e.keyCode) {
-    case 37: case 177: e.preventDefault(); load(cur - 1); break; // ← / prev
-    case 39: case 176: e.preventDefault(); load(cur + 1); break; // → / next
-    case 13: case 32:  e.preventDefault(); tocou(); break;       // Enter / Space
-    case 77: case 73:  e.preventDefault(); toggleList(); break;  // M / I
-    case 38: case 40:  e.preventDefault(); tocou(); break;       // ↑↓
+    case 37: case 177: e.preventDefault(); load(cur-1); break;
+    case 39: case 176: e.preventDefault(); load(cur+1); break;
+    case 13: case 32:  e.preventDefault(); tocou(); break;
+    case 77: case 73:  e.preventDefault(); toggleList(); break;
+    case 38: case 40:  e.preventDefault(); tocou(); break;
   }
 });
 
-// -------- Iniciar --------
 load(cur);
 </script>
 </body>
