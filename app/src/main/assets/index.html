@@ -13,37 +13,25 @@
       font-family: sans-serif;
     }
     #player {
-      position: fixed;
-      top: 0; left: 0;
+      position: fixed; top: 0; left: 0;
       width: 100vw; height: 100vh;
-      overflow: hidden;
-      background: #000;
+      overflow: hidden; background: #000;
     }
     #frame {
-      display: block;
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      border: 0;
-      background: #000;
+      display: block; position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      border: 0; background: #000;
     }
-
-    /* Barra de info — some sozinha */
     #topbar {
-      position: absolute;
-      top: 0; left: 0; right: 0;
+      position: absolute; top: 0; left: 0; right: 0;
       z-index: 30;
       background: linear-gradient(to bottom, rgba(0,0,0,0.88), transparent);
       padding: 10px 14px 30px;
       display: flex; align-items: center; gap: 8px;
-      opacity: 0;               /* começa invisível */
-      pointer-events: none;
+      opacity: 0; pointer-events: none;
       transition: opacity 0.5s ease;
     }
-    #topbar.visivel {
-      opacity: 1;
-      pointer-events: auto;
-    }
+    #topbar.visivel { opacity: 1; pointer-events: auto; }
     #ep-title {
       flex: 1; color: #fff; font-size: 15px; font-weight: 700;
       text-shadow: 0 1px 4px #000;
@@ -52,10 +40,23 @@
     #ep-counter { color: rgba(255,255,255,0.6); font-size: 13px; white-space: nowrap; }
     #btn-list {
       background: rgba(255,255,255,0.15); border: none; color: #fff;
-      border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer; flex-shrink: 0;
+      border-radius: 6px; padding: 4px 10px; font-size: 13px; cursor: pointer;
     }
 
-    /* Loading */
+    /* Feedback visual de navegação */
+    #nav-feedback {
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 35;
+      background: rgba(0,0,0,0.75);
+      color: #fff; font-size: 28px; font-weight: 700;
+      border-radius: 50%; width: 70px; height: 70px;
+      display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none;
+      transition: opacity 0.3s;
+    }
+    #nav-feedback.show { opacity: 1; }
+
     #loading {
       position: absolute; inset: 0; z-index: 40;
       background: #000;
@@ -74,17 +75,12 @@
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* Overlay para capturar toques */
     #overlay {
       position: absolute; inset: 0;
-      z-index: 20;
-      background: transparent;
+      z-index: 20; background: transparent;
     }
-
-    /* Lista de episódios */
     #ep-list {
-      display: none;
-      position: absolute; inset: 0; z-index: 50;
+      display: none; position: absolute; inset: 0; z-index: 50;
       background: rgba(0,0,0,0.96);
       overflow-y: auto; padding: 14px;
       -webkit-overflow-scrolling: touch;
@@ -116,6 +112,7 @@
   ></iframe>
 
   <div id="overlay"></div>
+  <div id="nav-feedback"></div>
 
   <div id="topbar">
     <span id="ep-title">Chaves.com</span>
@@ -281,21 +278,24 @@ var KEY = 'chavescom_ep';
 var cur = parseInt(localStorage.getItem(KEY) || '0');
 if (isNaN(cur) || cur < 0 || cur >= EPS.length) cur = 0;
 
-var frame     = document.getElementById('frame');
-var titleEl   = document.getElementById('ep-title');
-var counterEl = document.getElementById('ep-counter');
-var loading   = document.getElementById('loading');
-var loadTxt   = document.getElementById('loading-txt');
-var topbar    = document.getElementById('topbar');
-var epList    = document.getElementById('ep-list');
-var epItems   = document.getElementById('ep-items');
-var overlay   = document.getElementById('overlay');
+var frame       = document.getElementById('frame');
+var titleEl     = document.getElementById('ep-title');
+var counterEl   = document.getElementById('ep-counter');
+var loading     = document.getElementById('loading');
+var loadTxt     = document.getElementById('loading-txt');
+var topbar      = document.getElementById('topbar');
+var epList      = document.getElementById('ep-list');
+var epItems     = document.getElementById('ep-items');
+var overlay     = document.getElementById('overlay');
+var navFeedback = document.getElementById('nav-feedback');
 
-var topbarTimer = null;
-var listVisible = false;
-var autoplayDone = false;
+var topbarTimer    = null;
+var feedbackTimer  = null;
+var listVisible    = false;
+var autoplayDone   = false;
+var isLoading      = false;
 
-// ---- Gerar lista ----
+// ---- Lista de episódios ----
 EPS.forEach(function(ep, i) {
   var div = document.createElement('div');
   div.className = 'ep-item' + (i === cur ? ' active' : '');
@@ -305,7 +305,7 @@ EPS.forEach(function(ep, i) {
   epItems.appendChild(div);
 });
 
-// ---- Topbar: mostra por 4s e some ----
+// ---- Topbar ----
 function mostrarTopbar() {
   topbar.classList.add('visivel');
   clearTimeout(topbarTimer);
@@ -314,17 +314,29 @@ function mostrarTopbar() {
   }, 4000);
 }
 
+// ---- Feedback visual (← →) ----
+function showFeedback(symbol) {
+  navFeedback.textContent = symbol;
+  navFeedback.classList.add('show');
+  clearTimeout(feedbackTimer);
+  feedbackTimer = setTimeout(function() {
+    navFeedback.classList.remove('show');
+  }, 600);
+}
+
 // ---- Carregar episódio ----
 function driveUrl(id) {
   return 'https://drive.google.com/file/d/' + id + '/preview?rm=minimal';
 }
 
 function load(idx) {
+  if (isLoading) return;
   if (idx < 0) idx = EPS.length - 1;
   if (idx >= EPS.length) idx = 0;
   cur = idx;
   localStorage.setItem(KEY, String(cur));
   autoplayDone = false;
+  isLoading = true;
 
   var ep = EPS[cur];
   titleEl.textContent   = ep.title;
@@ -336,73 +348,55 @@ function load(idx) {
 
   loading.classList.remove('oculto');
   loadTxt.textContent = ep.title;
-
-  // Desativa overlay durante carga para o iframe receber eventos
   overlay.style.display = 'none';
 
   frame.src = '';
   setTimeout(function() { frame.src = driveUrl(ep.driveId); }, 100);
 
-  // Mostra barra 4s no início
   mostrarTopbar();
 }
 
-// ---- Autoplay: simula clique físico no centro do iframe ----
+// ---- Autoplay ----
 function simulateClick(x, y) {
-  // Despacha um MouseEvent real no documento — isso conta como gesto do usuário
-  // na WebView Android e permite autoplay
   var el = document.elementFromPoint(x, y) || document.body;
   var evt = document.createEvent('MouseEvents');
-  evt.initMouseEvent('click', true, true, window, 1, x, y, x, y,
-                     false, false, false, false, 0, null);
+  evt.initMouseEvent('click', true, true, window, 1,
+    x, y, x, y, false, false, false, false, 0, null);
   el.dispatchEvent(evt);
 }
 
 function tryAutoplay() {
   if (autoplayDone) return;
   autoplayDone = true;
-
   var rect = frame.getBoundingClientRect();
   var cx = Math.round(rect.left + rect.width  / 2);
   var cy = Math.round(rect.top  + rect.height / 2);
-
-  // Reativa overlay e dispara clique nele (que passa pro iframe via pointer-events)
   overlay.style.display = 'block';
   overlay.style.pointerEvents = 'auto';
   simulateClick(cx, cy);
-
-  // Depois de um instante, desativa overlay pra não atrapalhar
-  setTimeout(function() {
-    overlay.style.display = 'none';
-  }, 300);
+  setTimeout(function() { overlay.style.display = 'none'; }, 300);
 }
 
-// ---- Iframe carregou ----
 frame.addEventListener('load', function() {
-  // Aguarda o player do Drive renderizar, depois tenta play
   setTimeout(function() {
     loading.classList.add('oculto');
+    isLoading = false;
     tryAutoplay();
   }, 1800);
-
   mostrarTopbar();
 });
 
-// ---- Toque do usuário: mostrar barra ----
-overlay.addEventListener('click', function() {
-  mostrarTopbar();
-});
+// ---- Overlay toque ----
+overlay.addEventListener('click', function() { mostrarTopbar(); });
 
-// ---- Lista de episódios ----
+// ---- Lista ----
 function toggleList() {
   listVisible = !listVisible;
   epList.classList.toggle('show', listVisible);
+  overlay.style.display = listVisible ? 'none' : 'block';
   if (listVisible) {
-    overlay.style.display = 'none';
     var a = document.getElementById('epitem-' + cur);
     if (a) a.scrollIntoView({ block: 'center', behavior: 'smooth' });
-  } else {
-    overlay.style.display = 'block';
   }
 }
 
@@ -416,24 +410,70 @@ document.addEventListener('touchend', function(e) {
   var dx = e.changedTouches[0].clientX - swipeX;
   swipeX = null;
   if (listVisible) return;
-  if (Math.abs(dx) > 80) { dx < 0 ? load(cur + 1) : load(cur - 1); }
-  else { mostrarTopbar(); }
+  if (Math.abs(dx) > 80) {
+    if (dx < 0) { showFeedback('▶▶'); load(cur + 1); }
+    else         { showFeedback('◀◀'); load(cur - 1); }
+  } else {
+    mostrarTopbar();
+  }
 }, {passive: true});
 
-// ---- Controle remoto / teclado ----
+// ---- Controle remoto — TODOS os keyCodes de TV Android ----
+// https://developer.android.com/reference/android/view/KeyEvent
+// DPAD_LEFT=21, DPAD_RIGHT=22, DPAD_UP=19, DPAD_DOWN=20, DPAD_CENTER=23
+// ENTER=66, BACK=4, MENU=82
+// MEDIA_PREVIOUS=88, MEDIA_NEXT=87, MEDIA_REWIND=89, MEDIA_FAST_FORWARD=90
+// Arrow keys normais: LEFT=37, RIGHT=39, UP=38, DOWN=40
+// Alguns controles mandam keyCodes de gamepad: 96-107
+
 document.addEventListener('keydown', function(e) {
+  var k = e.keyCode;
+
+  // Na lista: só fechar com BACK ou MENU
   if (listVisible) {
-    if (e.keyCode === 27 || e.keyCode === 8) { e.preventDefault(); toggleList(); }
+    if (k === 4 || k === 8 || k === 27 || k === 82) {
+      e.preventDefault(); toggleList();
+    }
     return;
   }
-  switch (e.keyCode) {
-    case 37: case 177: e.preventDefault(); load(cur - 1); break;
-    case 39: case 176: e.preventDefault(); load(cur + 1); break;
-    case 13: case 32:  e.preventDefault(); mostrarTopbar(); break;
-    case 77: case 73:  e.preventDefault(); toggleList(); break;
-    case 38: case 40:  e.preventDefault(); mostrarTopbar(); break;
+
+  // PRÓXIMO episódio: D-PAD RIGHT, seta direita, MEDIA_NEXT, FAST_FORWARD
+  if (k === 22 || k === 39 || k === 87 || k === 90 || k === 176) {
+    e.preventDefault();
+    showFeedback('▶▶');
+    load(cur + 1);
+    return;
   }
-});
+
+  // ANTERIOR episódio: D-PAD LEFT, seta esquerda, MEDIA_PREVIOUS, REWIND
+  if (k === 21 || k === 37 || k === 88 || k === 89 || k === 177) {
+    e.preventDefault();
+    showFeedback('◀◀');
+    load(cur - 1);
+    return;
+  }
+
+  // MOSTRAR BARRA: D-PAD CENTER, Enter, OK, seta cima/baixo, espaço
+  if (k === 23 || k === 13 || k === 66 || k === 32 || k === 19 || k === 20 || k === 38 || k === 40) {
+    e.preventDefault();
+    mostrarTopbar();
+    return;
+  }
+
+  // LISTA: MENU, tecla M ou I
+  if (k === 82 || k === 77 || k === 73) {
+    e.preventDefault();
+    toggleList();
+    return;
+  }
+
+  // BACK: fechar lista ou sair
+  if (k === 4 || k === 8 || k === 27) {
+    e.preventDefault();
+    if (listVisible) toggleList();
+    return;
+  }
+}, true); // true = captura na fase de capture, antes do iframe receber
 
 // ---- Iniciar ----
 load(cur);
